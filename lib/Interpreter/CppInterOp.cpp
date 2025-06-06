@@ -302,10 +302,7 @@ namespace Cpp {
 
   bool IsBuiltin(TCppType_t type) {
     QualType Ty = QualType::getFromOpaquePtr(type);
-    if (Ty->isBuiltinType() || Ty->isAnyComplexType())
-      return true;
-    // FIXME: Figure out how to avoid the string comparison.
-    return llvm::StringRef(Ty.getAsString()).contains("complex");
+    return Ty->isBuiltinType();
   }
 
   bool IsIntegral(TCppType_t type) {
