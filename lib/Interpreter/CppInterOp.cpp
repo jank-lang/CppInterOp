@@ -552,6 +552,16 @@ namespace Cpp {
     return TypeSize/8;
   }
 
+  size_t GetAlignmentOfType(TCppType_t type) {
+    QualType QT = QualType::getFromOpaquePtr(type);
+    if (const TagType *TT = QT->getAs<TagType>())
+      return AlignmentOf(TT->getDecl());
+
+    auto TI = getSema().getASTContext().getTypeInfo(QT);
+    size_t TypeAlign = TI.Align;
+    return TypeAlign/8;
+  }
+
   bool IsVariable(TCppScope_t scope) {
     auto *D = (clang::Decl *)scope;
     return llvm::isa_and_nonnull<clang::VarDecl>(D);

@@ -303,6 +303,9 @@ namespace Cpp {
   /// Gets the size of the "type" that is passed in to this function.
   CPPINTEROP_API size_t GetSizeOfType(TCppType_t type);
 
+  /// Gets the alignment of the "type" that is passed in to this function.
+  CPPINTEROP_API size_t GetAlignmentOfType(TCppType_t type);
+
   /// Checks if the passed value is a variable.
   CPPINTEROP_API bool IsVariable(TCppScope_t scope);
 
