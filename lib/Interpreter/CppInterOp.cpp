@@ -2236,10 +2236,10 @@ namespace Cpp {
     void make_narg_ctor_with_return(const FunctionDecl* FD, const unsigned N,
                                     const std::string& class_name,
                                     std::ostringstream& buf, int indent_level) {
+      //
       // Make a code string that follows this pattern:
       //
-      //  (*(ClassName**)ret) = (obj) ?
-      //    new (*(ClassName**)ret) ClassName(args...) : new ClassName(args...);
+      //  new ((ClassName*)ret) ClassName(args...);
       //
       {
         std::ostringstream typedefbuf;
@@ -2248,18 +2248,9 @@ namespace Cpp {
         //  Write the return value assignment part.
         //
         indent(callbuf, indent_level);
-        callbuf << "(*(" << class_name << "**)ret) = ";
-        callbuf << "(obj) ? new (*(" << class_name << "**)ret) ";
+        callbuf << "new ((" << class_name << "*)ret) ";
         make_narg_ctor(FD, N, typedefbuf, callbuf, class_name, indent_level);
 
-        callbuf << ": new ";
-        //
-        //  Write the actual expression.
-        //
-        make_narg_ctor(FD, N, typedefbuf, callbuf, class_name, indent_level);
-        //
-        //  End the new expression statement.
-        //
         callbuf << ";\n";
         //
         //  Output the whole new expression and return statement.
