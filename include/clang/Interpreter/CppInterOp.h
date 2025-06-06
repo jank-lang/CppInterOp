@@ -772,6 +772,10 @@ namespace Cpp {
                             const std::vector<TemplateArgInfo>& explicit_types,
                             const std::vector<TemplateArgInfo>& arg_types);
 
+  CPPINTEROP_API TCppScope_t
+  BestMemberOverloadFunctionMatch(const std::vector<TCppScope_t>& candidates,
+                                  const std::vector<TemplateArgInfo>& arg_types);
+
   CPPINTEROP_API void GetAllCppNames(TCppScope_t scope,
                                      std::set<std::string>& names);
 

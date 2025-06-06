@@ -1290,6 +1290,44 @@ namespace Cpp {
     return Result;
   }
 
+  TCppScope_t BestMemberOverloadFunctionMatch(const std::vector<TCppScope_t>& candidates,
+                                              const std::vector<TemplateArgInfo>& arg_types) {
+    Sema& S = getSema();
+    ASTContext& C = S.getASTContext();
+    SourceLocation Loc;
+    OverloadCandidateSet candSet(Loc, OverloadCandidateSet::CSK_Normal);
+
+    QualType OT = QualType::getFromOpaquePtr(arg_types[0].m_Type).getNonReferenceType();
+    /* TODO: We need to have the classification be an rvalue when OT is an rvalue ref and
+     * an lvalue when OT is an lvalue ref.
+     * This needs to allow us to match ref-qualified member functions. */
+    Expr::Classification objClass = Expr::Classification::makeSimpleLValue();
+
+    SmallVector<Expr*, 8> args;
+    for (unsigned i = 1; i < arg_types.size(); ++i) {
+      ImplicitValueInitExpr* e = new (C) ImplicitValueInitExpr{ QualType::getFromOpaquePtr(arg_types[i].m_Type) };
+      args.push_back(e);
+    }
+
+    for (TCppScope_t F : candidates) {
+      Decl* D = (Decl*)F;
+      if (auto *MD = dyn_cast<CXXMethodDecl>(D)) {
+        if (MD->isDeleted())
+          continue;
+
+        DeclAccessPair found = DeclAccessPair::make(MD, MD->getAccess());
+        S.AddMethodCandidate(found, OT, objClass, args, candSet);
+      }
+    }
+
+    OverloadCandidateSet::iterator bestCand;
+    candSet.BestViableFunction(S, Loc, bestCand);
+    if (bestCand != candSet.end() && bestCand->Viable)
+      return bestCand->Function;
+
+    return nullptr;
+  }
+
   // Gets the AccessSpecifier of the function and checks if it is equal to
   // the provided AccessSpecifier.
   bool CheckMethodAccess(TCppFunction_t method, AccessSpecifier AS)
