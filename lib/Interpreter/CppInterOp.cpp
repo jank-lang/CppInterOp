@@ -1475,6 +1475,28 @@ namespace Cpp {
     return 0;
   }
 
+  std::vector<TCppFunction_t> LookupMethods(const std::string& name,
+                                            TCppScope_t parent) {
+    auto *D = (clang::Decl *)parent;
+    std::vector<TCppFunction_t> results;
+
+    if (auto *DC = llvm::dyn_cast<clang::DeclContext>(D)) {
+      auto &Ctx = getASTContext();
+      clang::IdentifierInfo &II = Ctx.Idents.get(name);
+      clang::DeclarationName DN(&II);
+
+      for (auto *ND : DC->lookup(DN)) {
+        if (auto *MD = llvm::dyn_cast<clang::CXXMethodDecl>(ND)) {
+          results.push_back(MD);
+        } else if (auto *TD = llvm::dyn_cast<clang::FunctionTemplateDecl>(ND)) {
+          results.push_back(TD);
+        }
+      }
+    }
+
+    return results;
+  }
+
   TCppType_t GetVariableType(TCppScope_t var) {
     auto* D = static_cast<Decl*>(var);
 

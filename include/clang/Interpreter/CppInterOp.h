@@ -515,6 +515,10 @@ namespace Cpp {
   CPPINTEROP_API TCppScope_t LookupDatamember(const std::string& name,
                                               TCppScope_t parent);
 
+  /// This is a Lookup function to be used specifically for methods.
+  CPPINTEROP_API std::vector<TCppFunction_t> LookupMethods(const std::string& name,
+                                                           TCppScope_t parent);
+
   /// Gets the type of the variable that is passed as a parameter.
   CPPINTEROP_API TCppType_t GetVariableType(TCppScope_t var);
 
