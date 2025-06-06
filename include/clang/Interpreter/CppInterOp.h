@@ -236,6 +236,9 @@ namespace Cpp {
 
   CPPINTEROP_API bool IsIntegral(TCppType_t type);
 
+  /// Checks if it is a void type.
+  CPPINTEROP_API bool IsVoid(TCppType_t type);
+
   /// Checks if it is a templated class.
   CPPINTEROP_API bool IsTemplate(TCppScope_t handle);
 

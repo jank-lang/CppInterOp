@@ -313,6 +313,11 @@ namespace Cpp {
     return Ty->isIntegralType(getSema().getASTContext());
   }
 
+  bool IsVoid(TCppType_t type) {
+    QualType Ty = QualType::getFromOpaquePtr(type);
+    return Ty->isVoidType();
+  }
+
   bool IsTemplate(TCppScope_t handle) {
     auto *D = (clang::Decl *)handle;
     return llvm::isa_and_nonnull<clang::TemplateDecl>(D);
