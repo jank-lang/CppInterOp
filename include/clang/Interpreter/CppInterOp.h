@@ -544,6 +544,9 @@ namespace Cpp {
   /// Get the underlying pointee type
   CPPINTEROP_API TCppType_t GetPointeeType(TCppType_t type);
 
+  /// Get a pointer type to the specified type
+  CPPINTEROP_API TCppType_t GetPointerType(TCppType_t type);
+
   /// Get a reference type to the specified type
   CPPINTEROP_API TCppType_t GetLValueReferenceType(TCppType_t type);
 
