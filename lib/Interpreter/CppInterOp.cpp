@@ -368,6 +368,23 @@ namespace Cpp {
     return false;
   }
 
+  bool IsConstructible(TCppType_t to_type, TCppType_t from_type) {
+    QualType FromTy = QualType::getFromOpaquePtr(from_type);
+    QualType ToTy = QualType::getFromOpaquePtr(to_type);
+
+    auto &S = getSema();
+    ASTContext &Ctx = S.getASTContext();
+    TypeSourceInfo *ToInfo = Ctx.getTrivialTypeSourceInfo(ToTy, SourceLocation());
+    TypeSourceInfo *FromInfo = Ctx.getTrivialTypeSourceInfo(FromTy, SourceLocation());
+
+    ExprResult ER = S.BuildTypeTrait(TT_IsConstructible, SourceLocation(), { ToInfo, FromInfo }, SourceLocation());
+    if (ER.isInvalid())
+      return false;
+
+    auto *TT = cast<TypeTraitExpr>(ER.get());
+    return TT->getValue();
+  }
+
   bool IsEnumScope(TCppScope_t handle) {
     auto *D = (clang::Decl *)handle;
     return llvm::isa_and_nonnull<clang::EnumDecl>(D);

@@ -253,6 +253,9 @@ namespace Cpp {
 
   CPPINTEROP_API bool IsAbstract(TCppType_t klass);
 
+  /// Checks if it is possible to construct one type from another.
+  CPPINTEROP_API bool IsConstructible(TCppType_t to_type, TCppType_t from_type);
+
   /// Checks if it is an enum name (EnumDecl represents an enum name).
   CPPINTEROP_API bool IsEnumScope(TCppScope_t handle);
 
