@@ -2316,64 +2316,37 @@ namespace Cpp {
 
         buf << typedefbuf.str();
 
-        buf << "if (ret) {\n";
-        ++indent_level;
-        {
-          //
-          //  Write the placement part of the placement new.
-          //
-          indent(callbuf, indent_level);
-          callbuf << "new (ret) ";
-          //
-          //  Write the type part of the placement new.
-          //
-          callbuf << "(" << type_name.c_str();
-          if (refType != kNotReference) {
-            callbuf << "*) (&";
-            type_name += "&";
-          } else if (isPointer) {
-            callbuf << "*) (";
-            type_name += "*";
-          } else {
-            callbuf << ") (";
-          }
-          //
-          //  Write the actual function call.
-          //
-          make_narg_call(FD, type_name, N, typedefbuf, callbuf, class_name,
-                         indent_level);
-          //
-          //  End the placement new.
-          //
-          callbuf << ");\n";
-          indent(callbuf, indent_level);
-          callbuf << "return;\n";
-          //
-          //  Output the whole placement new expression and return statement.
-          //
-          buf << typedefbuf.str() << callbuf.str();
+        //
+        //  Write the placement part of the placement new.
+        //
+        callbuf << "new (ret) ";
+        //
+        //  Write the type part of the placement new.
+        //
+        callbuf << "(" << type_name.c_str();
+        if (refType != kNotReference) {
+          callbuf << "*) (&";
+          type_name += "&";
+        } else if (isPointer) {
+          callbuf << "*) (";
+          type_name += "*";
+        } else {
+          callbuf << ") (";
         }
+        //
+        //  Write the actual function call.
+        //
+        make_narg_call(FD, type_name, N, typedefbuf, callbuf, class_name,
+            indent_level);
+        //
+        //  End the placement new.
+        //
+        callbuf << ");\n";
+        //
+        //  Output the whole placement new expression and return statement.
+        //
+        buf << typedefbuf.str() << callbuf.str();
         --indent_level;
-        indent(buf, indent_level);
-        buf << "}\n";
-        indent(buf, indent_level);
-        buf << "else {\n";
-        ++indent_level;
-        {
-          std::ostringstream typedefbuf;
-          std::ostringstream callbuf;
-          indent(callbuf, indent_level);
-          callbuf << "(void)(";
-          make_narg_call(FD, type_name, N, typedefbuf, callbuf, class_name,
-                         indent_level);
-          callbuf << ");\n";
-          indent(callbuf, indent_level);
-          callbuf << "return;\n";
-          buf << typedefbuf.str() << callbuf.str();
-        }
-        --indent_level;
-        indent(buf, indent_level);
-        buf << "}\n";
       }
     }
 
