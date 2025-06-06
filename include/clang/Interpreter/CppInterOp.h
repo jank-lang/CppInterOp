@@ -255,6 +255,9 @@ namespace Cpp {
 
   CPPINTEROP_API TCppType_t GetCommonType(TCppType_t lhs, TCppType_t rhs);
 
+  /// Checks if it is possible to implicitly convert from one type to another.
+  CPPINTEROP_API bool IsImplicitlyConvertible(TCppType_t from_type, TCppType_t to_type);
+
   /// Checks if it is possible to construct one type from another.
   CPPINTEROP_API bool IsConstructible(TCppType_t to_type, TCppType_t from_type);
 

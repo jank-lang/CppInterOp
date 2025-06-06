@@ -387,6 +387,16 @@ namespace Cpp {
     return nullptr;
   }
 
+  bool IsImplicitlyConvertible(TCppType_t from_type, TCppType_t to_type) {
+    QualType FromTy = QualType::getFromOpaquePtr(from_type);
+    QualType ToTy = QualType::getFromOpaquePtr(to_type);
+    auto &Sema = getSema();
+    auto &C = Sema.getASTContext();
+    Expr *DummyExpr = new (C) clang::OpaqueValueExpr(clang::SourceLocation(), FromTy.getNonReferenceType(), clang::ExprValueKind::VK_PRValue);;
+    ImplicitConversionSequence ICS = Sema.TryImplicitConversion(DummyExpr, ToTy, false, clang::Sema::AllowedExplicit::None, true, false, false);
+    return ICS.isStandard() || ICS.isUserDefined() || ICS.isEllipsis();
+  }
+
   bool IsConstructible(TCppType_t to_type, TCppType_t from_type) {
     QualType FromTy = QualType::getFromOpaquePtr(from_type);
     QualType ToTy = QualType::getFromOpaquePtr(to_type);
