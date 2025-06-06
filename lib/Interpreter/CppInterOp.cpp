@@ -308,6 +308,11 @@ namespace Cpp {
     return llvm::StringRef(Ty.getAsString()).contains("complex");
   }
 
+  bool IsIntegral(TCppType_t type) {
+    QualType Ty = QualType::getFromOpaquePtr(type);
+    return Ty->isIntegralType(getSema().getASTContext());
+  }
+
   bool IsTemplate(TCppScope_t handle) {
     auto *D = (clang::Decl *)handle;
     return llvm::isa_and_nonnull<clang::TemplateDecl>(D);

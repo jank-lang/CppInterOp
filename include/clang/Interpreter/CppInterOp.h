@@ -234,6 +234,8 @@ namespace Cpp {
   /// Checks if it is a "built-in" or a "complex" type.
   CPPINTEROP_API bool IsBuiltin(TCppType_t type);
 
+  CPPINTEROP_API bool IsIntegral(TCppType_t type);
+
   /// Checks if it is a templated class.
   CPPINTEROP_API bool IsTemplate(TCppScope_t handle);
 
