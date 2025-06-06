@@ -2159,7 +2159,9 @@ namespace Cpp {
 
       if (const CXXMethodDecl* MD = dyn_cast<CXXMethodDecl>(FD)) {
         // This is a class, struct, or union member.
-        if (MD->isConst())
+        if (MD->isStatic())
+          callbuf << class_name << "::";
+        else if (MD->isConst())
           callbuf << "((const " << class_name << "*)obj)->";
         else
           callbuf << "((" << class_name << "*)obj)->";
