@@ -1667,7 +1667,7 @@ namespace Cpp {
 
   TCppType_t GetNonReferenceType(TCppType_t type) {
     if (!IsReferenceType(type))
-      return nullptr;
+      return type;
     QualType QT = QualType::getFromOpaquePtr(type);
     return QT.getNonReferenceType().getAsOpaquePtr();
   }
