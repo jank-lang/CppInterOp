@@ -253,6 +253,8 @@ namespace Cpp {
 
   CPPINTEROP_API bool IsAbstract(TCppType_t klass);
 
+  CPPINTEROP_API TCppType_t GetCommonType(TCppType_t lhs, TCppType_t rhs);
+
   /// Checks if it is possible to construct one type from another.
   CPPINTEROP_API bool IsConstructible(TCppType_t to_type, TCppType_t from_type);
 

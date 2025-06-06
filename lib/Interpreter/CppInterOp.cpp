@@ -368,6 +368,25 @@ namespace Cpp {
     return false;
   }
 
+  TCppType_t GetCommonType(TCppType_t lhs, TCppType_t rhs) {
+    QualType LHS = QualType::getFromOpaquePtr(lhs);
+    QualType RHS = QualType::getFromOpaquePtr(rhs);
+    Sema &S = getSema();
+    ASTContext& C = S.getASTContext();
+
+    if (LHS->isArithmeticType() && RHS->isArithmeticType()) {
+      ImplicitValueInitExpr* L = new (C) ImplicitValueInitExpr{ LHS };
+      ImplicitValueInitExpr* R = new (C) ImplicitValueInitExpr{ RHS };
+      ExprResult LRes(L), RRes(R);
+      QualType Common = S.UsualArithmeticConversions(LRes, RRes, SourceLocation(), Sema::ACK_Arithmetic);
+      return Common.getAsOpaquePtr();
+    }
+
+    /* TODO: Handle complex types. */
+
+    return nullptr;
+  }
+
   bool IsConstructible(TCppType_t to_type, TCppType_t from_type) {
     QualType FromTy = QualType::getFromOpaquePtr(from_type);
     QualType ToTy = QualType::getFromOpaquePtr(to_type);
