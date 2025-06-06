@@ -328,6 +328,33 @@ namespace Cpp {
     return llvm::isa_and_nonnull<clang::ClassTemplateSpecializationDecl>(D);
   }
 
+  bool IsTemplateSpecializationOf(TCppScope_t spec, TCppScope_t templ) {
+    auto *S = (clang::Decl *)spec;
+    auto *T = (clang::Decl *)templ;
+
+    if (auto *ClassSpec = llvm::dyn_cast<ClassTemplateSpecializationDecl>(S)) {
+      if (auto *ClassTpl = llvm::dyn_cast<ClassTemplateDecl>(T)) {
+        return ClassSpec->getSpecializedTemplate()->getCanonicalDecl() == ClassTpl->getCanonicalDecl();
+      }
+    }
+
+    if (auto *FD = llvm::dyn_cast<FunctionDecl>(S)) {
+      if (auto *FTSI = FD->getTemplateSpecializationInfo()) {
+        if (auto *FnTpl = llvm::dyn_cast<FunctionTemplateDecl>(T)) {
+          return FTSI->getTemplate()->getCanonicalDecl() == FnTpl->getCanonicalDecl();
+        }
+      }
+    }
+
+    if (auto *VarSpec = llvm::dyn_cast<VarTemplateSpecializationDecl>(S)) {
+      if (auto *VarTpl = llvm::dyn_cast<VarTemplateDecl>(T)) {
+        return VarSpec->getSpecializedTemplate()->getCanonicalDecl() == VarTpl->getCanonicalDecl();
+      }
+    }
+
+    return false;
+  }
+
   bool IsTypedefed(TCppScope_t handle) {
     auto *D = (clang::Decl *)handle;
     return llvm::isa_and_nonnull<clang::TypedefNameDecl>(D);

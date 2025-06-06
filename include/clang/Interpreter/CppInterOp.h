@@ -245,6 +245,9 @@ namespace Cpp {
   /// Checks if it is a class template specialization class.
   CPPINTEROP_API bool IsTemplateSpecialization(TCppScope_t handle);
 
+  /// Checks if it is a class template specialization class.
+  CPPINTEROP_API bool IsTemplateSpecializationOf(TCppScope_t spec, TCppScope_t templ);
+
   /// Checks if \c handle introduces a typedef name via \c typedef or \c using.
   CPPINTEROP_API bool IsTypedefed(TCppScope_t handle);
 
