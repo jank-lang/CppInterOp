@@ -2751,10 +2751,21 @@ namespace Cpp {
              "#pragma clang diagnostic ignored \"-Wformat-security\"\n"
              "__attribute__((used)) "
              "__attribute__((annotate(\"__cling__ptrcheck(off)\")))\n"
-             "extern \"C\" void ";
+             "extern \"C\" "
+             "[[gnu::always_inline]]\n"
+             "inline void ";
       buf << wrapper_name;
-      buf << "(void* obj, int nargs, void** args, void* ret)\n"
-             "{\n";
+      buf << "(void* obj, int nargs, void** args, ";
+
+      {
+        QualType QT = FD->getReturnType();
+        if (QT->isVoidType() && !dyn_cast<CXXConstructorDecl>(FD)) {
+          buf << "void*)\n";
+        } else {
+          buf << "[[gnu::nonnull]] void* ret)\n";
+        }
+      }
+      buf << "{\n";
       ++indent_level;
       if (min_args == num_params) {
         // No parameters with defaults.
