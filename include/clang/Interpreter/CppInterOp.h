@@ -229,6 +229,8 @@ namespace Cpp {
 
   CPPINTEROP_API size_t SizeOf(TCppScope_t scope);
 
+  CPPINTEROP_API size_t AlignmentOf(TCppScope_t scope);
+
   /// Checks if it is a "built-in" or a "complex" type.
   CPPINTEROP_API bool IsBuiltin(TCppType_t type);
 

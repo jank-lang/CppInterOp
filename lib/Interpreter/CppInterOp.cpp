@@ -286,6 +286,20 @@ namespace Cpp {
     return 0;
   }
 
+  size_t AlignmentOf(TCppScope_t scope) {
+    assert (scope);
+    if (!IsComplete(scope))
+      return 0;
+
+    if (auto *RD = dyn_cast<RecordDecl>(static_cast<Decl*>(scope))) {
+      ASTContext &Context = RD->getASTContext();
+      const ASTRecordLayout &Layout = Context.getASTRecordLayout(RD);
+      return Layout.getAlignment().getQuantity();
+    }
+
+    return 0;
+  }
+
   bool IsBuiltin(TCppType_t type) {
     QualType Ty = QualType::getFromOpaquePtr(type);
     if (Ty->isBuiltinType() || Ty->isAnyComplexType())
