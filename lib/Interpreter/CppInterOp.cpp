@@ -1690,6 +1690,13 @@ namespace Cpp {
     return QT.getAsOpaquePtr();
   }
 
+  TCppType_t GetTypeWithoutCv(TCppType_t type)
+  {
+    QualType QT = QualType::getFromOpaquePtr(type);
+    QT = QualType(QT->getUnqualifiedDesugaredType(), 0);
+    return QT.getAsOpaquePtr();
+  }
+
   std::string GetTypeAsString(TCppType_t var)
   {
       QualType QT = QualType::getFromOpaquePtr(var);

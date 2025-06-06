@@ -548,6 +548,9 @@ namespace Cpp {
   /// Gets the pure, Underlying Type (as opposed to the Using Type).
   CPPINTEROP_API TCppType_t GetUnderlyingType(TCppType_t type);
 
+  /// Gets the type without const and volatile qualifiers.
+  CPPINTEROP_API TCppType_t GetTypeWithoutCv(TCppType_t type);
+
   /// Gets the Type (passed as a parameter) as a String value.
   CPPINTEROP_API std::string GetTypeAsString(TCppType_t type);
 
