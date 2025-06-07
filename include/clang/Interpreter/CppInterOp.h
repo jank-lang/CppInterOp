@@ -202,6 +202,13 @@ namespace Cpp {
     std::string m_name;
   };
 
+  struct TemplateArgInfo {
+    TCppType_t m_Type;
+    const char* m_IntegralValue;
+    TemplateArgInfo(TCppScope_t type, const char* integral_value = nullptr)
+      : m_Type(type), m_IntegralValue(integral_value) {}
+  };
+
   ///\returns the version string information of the library.
   CPPINTEROP_API std::string GetVersion();
 
@@ -753,12 +760,6 @@ namespace Cpp {
   /// Tries to load provided objects in a string format (prettyprint).
   CPPINTEROP_API std::string ObjToString(const char* type, void* obj);
 
-  struct TemplateArgInfo {
-    TCppType_t m_Type;
-    const char* m_IntegralValue;
-    TemplateArgInfo(TCppScope_t type, const char* integral_value = nullptr)
-      : m_Type(type), m_IntegralValue(integral_value) {}
-  };
   /// Builds a template instantiation for a given templated declaration.
   /// Offers a single interface for instantiation of class, function and
   /// variable templates
