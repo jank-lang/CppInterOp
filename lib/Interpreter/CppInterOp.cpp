@@ -3798,6 +3798,11 @@ namespace Cpp {
                                template_args_size);
   }
 
+  void InstantiateTemplate(TCppScope_t spec) {
+    Decl *S = static_cast<Decl*>(spec);
+    getSema().InstantiateClassTemplateSpecialization(SourceLocation(), llvm::cast<clang::ClassTemplateSpecializationDecl>(S), TemplateSpecializationKind::TSK_ExplicitInstantiationDefinition);
+  }
+
   void GetClassTemplateInstantiationArgs(TCppScope_t templ_instance,
                                          std::vector<TemplateArgInfo> &args) {
     auto* CTSD = static_cast<ClassTemplateSpecializationDecl*>(templ_instance);
