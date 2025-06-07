@@ -2961,6 +2961,120 @@ namespace Cpp {
       return 1;
     }
 
+    int get_aggregate_ctor_predicate_wrapper_code(compat::Interpreter& I, const QualType& T,
+                                                  const std::vector<QualType>& ATs,
+                                                  std::string& wrapper_name,
+                                                  std::string& wrapper) {
+      ASTContext& Context = getSema().getASTContext();
+      PrintingPolicy Policy(Context.getPrintingPolicy());
+      //
+      //  Make the wrapper name.
+      //
+      {
+        std::ostringstream buf;
+        buf << "__cf";
+        buf << '_' << gWrapperSerial++;
+        wrapper_name = buf.str();
+        LLVM_DEBUG(dbgs() << "Wrapper name (aggregate ctor predicate): " << wrapper_name << "\n");
+      }
+      //
+      //  Write the helper template code.
+      // FIXME: this should be synthesized into the AST!
+      //
+      int indent_level = 0;
+      std::ostringstream typedefbuf;
+      std::ostringstream buf;
+      static std::string helper_name;
+
+      if(helper_name.empty()) {
+        {
+          std::ostringstream buf;
+          buf << "__cf";
+          buf << '_' << gWrapperSerial++;
+          helper_name = buf.str();
+          LLVM_DEBUG(dbgs() << "Helper name (aggregate ctor predicate): " << helper_name << "\n");
+        }
+        std::ostringstream helper_buf;
+
+        // Make a code string that follows this pattern:
+        //
+        // if constexpr(requires{ T{ std::declval<Args>()... }; }) {
+        //   return true;
+        // } else {
+        //   return false;
+        // }
+        //
+        helper_buf << "template <typename T, typename... Args>\n"
+                      "__attribute__((used)) "
+                      "__attribute__((annotate(\"__cling__ptrcheck(off)\")))\n"
+                      "[[gnu::always_inline]]\n"
+                      "constexpr bool ";
+        helper_buf << helper_name;
+        helper_buf << "()\n"
+              "{\n";
+        indent(helper_buf, ++indent_level);
+        helper_buf << "return requires { T{ std::declval<Args>()... }; };\n";
+        indent(helper_buf, --indent_level);
+        helper_buf << "}\n";
+
+        std::string code = helper_buf.str();
+        Declare(code.c_str());
+        LLVM_DEBUG(dbgs() << "Compiled helper '" << code << "'\n");
+      }
+
+      //
+      //  Write the wrapper code.
+      // FIXME: this should be synthesized into the AST!
+      //
+      buf << "__attribute__((used)) "
+             "__attribute__((annotate(\"__cling__ptrcheck(off)\")))\n"
+             "extern \"C\" "
+             "[[gnu::always_inline]]\n"
+             "inline void ";
+      buf << wrapper_name;
+      buf << "(void*, int, void**, [[gnu::nonnull]] void* ret)\n"
+             "{\n";
+      ++indent_level;
+      indent(buf, indent_level);
+
+      // Make a code string that follows this pattern:
+      //
+      // new (ret) bool{ helper<T, A1, A2, A3>() };
+      //
+      buf << "new (ret) bool{ " << helper_name << "<";
+      {
+        QualType QT = T.getCanonicalType();
+        std::string type;
+        get_type_as_string(QT, type, Context, Context.getPrintingPolicy());
+        buf << type;
+      }
+
+      for(const auto& AT: ATs) {
+        buf << ", ";
+        QualType QT = AT.getCanonicalType();
+        std::string type_name;
+        EReferenceType refType = kNotReference;
+        bool isPointer = false;
+        collect_type_info(nullptr, QT, typedefbuf, buf, type_name, refType,
+                          isPointer, indent_level, true);
+
+        if (refType != kNotReference) {
+          buf << type_name.c_str() << (refType == kLValueReference ? "&" : "&&");
+        } else if (isPointer) {
+          buf << type_name.c_str() << "*";
+        } else {
+          buf << type_name.c_str();
+        }
+      }
+      buf << ">() };\n";
+      --indent_level;
+      indent(buf, indent_level);
+      buf << "}\n";
+
+      wrapper = buf.str();
+      return 1;
+    }
+
     template <WrapperKind K = WrapperKind::Jit>
     auto make_wrapper(compat::Interpreter& I,
                       const FunctionDecl* FD) {
@@ -3075,6 +3189,29 @@ namespace Cpp {
       return (Ret)wrapper;
     }
 
+    JitCall::GenericCall make_aggregate_ctor_predicate_wrapper(compat::Interpreter& I,
+                                                               const QualType& T,
+                                                               const std::vector<QualType>& ATs) {
+      std::string wrapper_name;
+      std::string wrapper_code;
+
+      if (get_aggregate_ctor_predicate_wrapper_code(I, T, ATs, wrapper_name, wrapper_code) == 0)
+        return nullptr;
+
+      //
+      //   Compile the wrapper code.
+      //
+      bool withAccessControl = true;
+      void *wrapper = compile_wrapper<WrapperKind::Jit>(I, wrapper_name, wrapper_code,
+                                                        withAccessControl);
+      if (!wrapper) {
+        llvm::errs() << "TClingCallFunc::make_wrapper"
+                     << ":"
+                     << "Failed to compile\n"
+                     << "==== SOURCE BEGIN ====\n"
+                     << wrapper_code << "\n"
+                     << "==== SOURCE END ====\n";
+      }
       LLVM_DEBUG(dbgs() << "Compiled '" << (wrapper ? "" : "un")
                  << "successfully:\n" << wrapper_code << "'\n");
       return (JitCall::GenericCall)wrapper;
@@ -3276,6 +3413,39 @@ namespace Cpp {
 #undef DEBUG_TYPE
     } // namespace
       // End of JitCall Helper Functions
+
+    bool IsAggregateConstructible(TCppType_t to_type,
+                                  const std::vector<TemplateArgInfo> &member_types) {
+      QualType ToTy = QualType::getFromOpaquePtr(to_type);
+
+      static std::map<QualType, bool> gStore;
+      auto I = gStore.find(ToTy);
+      if (I != gStore.end())
+        return I->second;
+
+      if (!ToTy->isAggregateType()) {
+        gStore.emplace(ToTy, false);
+        return false;
+      }
+
+      ASTContext& ASTC = getASTContext();
+      std::vector<QualType> MTs;
+      MTs.reserve(member_types.size());
+      for(auto MT : member_types) {
+        MTs.emplace_back(QualType::getFromOpaquePtr(MT.m_Type));
+      }
+
+      /* TODO: Use Clang to figure this out instead of JIT compiling a trait. */
+      if (auto* Wrapper = make_aggregate_ctor_predicate_wrapper(getInterp(), ToTy, MTs)) {
+        bool Result = false;
+        Wrapper(nullptr, 0, nullptr, &Result);
+        gStore.emplace(ToTy, Result);
+        return Result;
+      }
+      gStore.emplace(ToTy, false);
+      return false;
+    }
+
 
     CPPINTEROP_API JitCall MakeFunctionCallable(TInterp_t I,
                                                 TCppConstFunction_t func) {
