@@ -2961,6 +2961,82 @@ namespace Cpp {
       return 1;
     }
 
+    int get_builtin_ctor_wrapper_code(compat::Interpreter& I, const QualType& CT,
+                                      const QualType& AT, std::string& wrapper_name,
+                                      std::string& wrapper) {
+      ASTContext& Context = getSema().getASTContext();
+      PrintingPolicy Policy(Context.getPrintingPolicy());
+      //
+      //  Make the wrapper name.
+      //
+      {
+        std::ostringstream buf;
+        buf << "__cf";
+        buf << '_' << gWrapperSerial++;
+        wrapper_name = buf.str();
+        LLVM_DEBUG(dbgs() << "Wrapper name (builtin ctor): " << wrapper_name << "\n");
+      }
+      //
+      //  Write the wrapper code.
+      // FIXME: this should be synthesized into the AST!
+      //
+      int indent_level = 0;
+      std::ostringstream typedefbuf;
+      std::ostringstream buf;
+      buf << "__attribute__((used)) "
+             "__attribute__((annotate(\"__cling__ptrcheck(off)\")))\n"
+             "extern \"C\" "
+             "[[gnu::always_inline]]\n"
+             "inline void ";
+      buf << wrapper_name;
+      buf << "(void*, int, [[gnu::nonnull]] void** args, [[gnu::nonnull]] void* ret)\n"
+             "{\n";
+      ++indent_level;
+      indent(buf, indent_level);
+
+      // Make a code string that follows this pattern:
+      //
+      // new (ret) (CT)(*(AT*)args[0]);
+      //
+      // If there are no arguments, the code string is like this:
+      //
+      // new (ret) (CT)();
+      //
+      buf << "new (ret) ";
+      {
+        QualType QT = CT.getCanonicalType();
+        std::string type;
+        get_type_as_string(QT, type, Context, Context.getPrintingPolicy());
+        buf << "(" << type << ")(";
+      }
+      if(!AT.isNull()) {
+        QualType QT = AT.getCanonicalType();
+        std::string type_name;
+        EReferenceType refType = kNotReference;
+        bool isPointer = false;
+        collect_type_info(nullptr, QT, typedefbuf, buf, type_name, refType,
+                          isPointer, indent_level, true);
+
+        if (refType != kNotReference) {
+          buf << "(" << type_name.c_str()
+                  << (refType == kLValueReference ? "&" : "&&") << ")*("
+                  << type_name.c_str() << "*)args[0]";
+        } else if (isPointer) {
+          buf << "*(" << type_name.c_str() << "**)args[0]";
+        } else {
+          // pointer falls back to non-pointer case; the argument preserves
+          // the "pointerness" (i.e. doesn't reference the value).
+          buf << "*(" << type_name.c_str() << "*)args[0]";
+        }
+      }
+      buf << ");\n";
+
+      --indent_level;
+      buf << "}\n";
+      wrapper = buf.str();
+      return 1;
+    }
+
     int get_aggregate_ctor_predicate_wrapper_code(compat::Interpreter& I, const QualType& T,
                                                   const std::vector<QualType>& ATs,
                                                   std::string& wrapper_name,
@@ -3176,6 +3252,42 @@ namespace Cpp {
                                          withAccessControl);
       if (wrapper) {
         gWrapperStore.insert(std::make_pair(VD, (Ret)wrapper));
+      } else {
+        llvm::errs() << "TClingCallFunc::make_wrapper"
+                     << ":"
+                     << "Failed to compile\n"
+                     << "==== SOURCE BEGIN ====\n"
+                     << wrapper_code << "\n"
+                     << "==== SOURCE END ====\n";
+      }
+      LLVM_DEBUG(dbgs() << "Compiled '" << (wrapper ? "" : "un")
+                 << "successfully:\n" << wrapper_code << "'\n");
+      return (Ret)wrapper;
+    }
+
+    template <WrapperKind K>
+    auto make_builtin_ctor_wrapper(compat::Interpreter& I, const QualType& CT, const QualType& AT) {
+      using Ret = std::conditional_t<K == WrapperKind::Jit, JitCall::GenericCall, AotCall*>;
+      static std::map<std::pair<QualType, QualType>, Ret> gWrapperStore;
+
+      auto R = gWrapperStore.find({ CT, AT });
+      if (R != gWrapperStore.end())
+        return R->second;
+
+      std::string wrapper_name;
+      std::string wrapper_code;
+
+      if (get_builtin_ctor_wrapper_code(I, CT, AT, wrapper_name, wrapper_code) == 0)
+        return (Ret)nullptr;
+
+      //
+      //   Compile the wrapper code.
+      //
+      bool withAccessControl = true;
+      void *wrapper = compile_wrapper<K>(I, wrapper_name, wrapper_code,
+                                         withAccessControl);
+      if (wrapper) {
+        gWrapperStore.insert(std::make_pair(std::make_pair(CT, AT), (Ret)wrapper));
       } else {
         llvm::errs() << "TClingCallFunc::make_wrapper"
                      << ":"
@@ -3520,6 +3632,25 @@ namespace Cpp {
 
     CPPINTEROP_API AotCall MakeAotCallable(TCppScope_t scope) {
       return MakeAotCallable(&getInterp(), scope);
+    }
+
+    CPPINTEROP_API AotCall MakeBuiltinConstructorAotCallable(TCppType_t type) {
+      QualType CT = QualType::getFromOpaquePtr(type);
+      if (auto* Wrapper = make_builtin_ctor_wrapper<WrapperKind::Aot>(getInterp(), CT, {})) {
+        return *Wrapper;
+      }
+      // FIXME: else error we failed to compile the wrapper.
+      return {};
+    }
+
+    CPPINTEROP_API AotCall MakeBuiltinConstructorAotCallable(TCppType_t type, TCppType_t arg_type) {
+      QualType CT = QualType::getFromOpaquePtr(type);
+      QualType AT = QualType::getFromOpaquePtr(arg_type);
+      if (auto* Wrapper = make_builtin_ctor_wrapper<WrapperKind::Aot>(getInterp(), CT, AT)) {
+        return *Wrapper;
+      }
+      // FIXME: else error we failed to compile the wrapper.
+      return {};
     }
 
   namespace {

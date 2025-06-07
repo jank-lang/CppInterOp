@@ -637,6 +637,10 @@ namespace Cpp {
   CPPINTEROP_API AotCall MakeAotCallable(TInterp_t I,
                                          TCppScope_t scope);
 
+  CPPINTEROP_API AotCall MakeBuiltinConstructorAotCallable(TCppType_t type);
+
+  CPPINTEROP_API AotCall MakeBuiltinConstructorAotCallable(TCppType_t type, TCppType_t arg_type);
+
   /// Checks if a function declared is of const type or not.
   CPPINTEROP_API bool IsConstMethod(TCppFunction_t method);
 
