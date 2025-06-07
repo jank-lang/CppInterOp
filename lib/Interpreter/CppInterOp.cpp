@@ -3151,6 +3151,89 @@ namespace Cpp {
       return 1;
     }
 
+    int get_aggregate_ctor_wrapper_code(compat::Interpreter& I, const QualType& T,
+                                        const std::vector<QualType>& ATs, std::string& wrapper_name,
+                                        std::string& wrapper) {
+      ASTContext& Context = getSema().getASTContext();
+      PrintingPolicy Policy(Context.getPrintingPolicy());
+      //
+      //  Make the wrapper name.
+      //
+      {
+        std::ostringstream buf;
+        buf << "__cf";
+        buf << '_' << gWrapperSerial++;
+        wrapper_name = buf.str();
+        LLVM_DEBUG(dbgs() << "Wrapper name (aggregate ctor): " << wrapper_name << "\n");
+      }
+      //
+      //  Write the wrapper code.
+      // FIXME: this should be synthesized into the AST!
+      //
+      int indent_level = 0;
+      std::ostringstream typedefbuf;
+      std::ostringstream buf;
+      buf << "__attribute__((used)) "
+             "__attribute__((annotate(\"__cling__ptrcheck(off)\")))\n"
+             "extern \"C\" "
+             "[[gnu::always_inline]]\n"
+             "inline void ";
+      buf << wrapper_name;
+      buf << "(void*, int, [[gnu::nonnull]] void** args, [[gnu::nonnull]] void* ret)\n"
+             "{\n";
+      ++indent_level;
+      indent(buf, indent_level);
+
+      // Make a code string that follows this pattern:
+      //
+      // new (ret) (CT){*(AT*)args[0]};
+      //
+      // If there are no arguments, the code string is like this:
+      //
+      // new (ret) (CT){};
+      //
+      buf << "new (ret) ";
+      {
+        QualType QT = T.getCanonicalType();
+        std::string type;
+        get_type_as_string(QT, type, Context, Context.getPrintingPolicy());
+        buf << "(" << type << "){";
+      }
+
+      bool Comma = false;
+      for (unsigned i = 0U; i < ATs.size(); ++i) {
+        if(Comma) {
+          buf << ", ";
+        }
+        Comma = true;
+
+        QualType QT = ATs[i].getCanonicalType();
+        std::string type_name;
+        EReferenceType refType = kNotReference;
+        bool isPointer = false;
+        collect_type_info(nullptr, QT, typedefbuf, buf, type_name, refType,
+                          isPointer, indent_level, true);
+
+        if (refType != kNotReference) {
+          buf << "(" << type_name.c_str()
+                  << (refType == kLValueReference ? "&" : "&&") << ")*("
+                  << type_name.c_str() << "*)args[" << i << "]";
+        } else if (isPointer) {
+          buf << "*(" << type_name.c_str() << "**)args[" << i << "]";
+        } else {
+          // pointer falls back to non-pointer case; the argument preserves
+          // the "pointerness" (i.e. doesn't reference the value).
+          buf << "*(" << type_name.c_str() << "*)args[" << i << "]";
+        }
+      }
+      buf << "};\n";
+
+      --indent_level;
+      buf << "}\n";
+      wrapper = buf.str();
+      return 1;
+    }
+
     template <WrapperKind K = WrapperKind::Jit>
     auto make_wrapper(compat::Interpreter& I,
                       const FunctionDecl* FD) {
@@ -3327,6 +3410,41 @@ namespace Cpp {
       LLVM_DEBUG(dbgs() << "Compiled '" << (wrapper ? "" : "un")
                  << "successfully:\n" << wrapper_code << "'\n");
       return (JitCall::GenericCall)wrapper;
+    }
+
+    template <WrapperKind K>
+    auto make_aggregate_ctor_wrapper(compat::Interpreter& I, const QualType& T,
+                                     const std::vector<QualType>& ATs) {
+      using Ret = std::conditional_t<K == WrapperKind::Jit, JitCall::GenericCall, AotCall*>;
+      static std::map<std::pair<QualType, std::vector<QualType>>, Ret> gWrapperStore;
+
+      auto R = gWrapperStore.find({ T, ATs });
+      if (R != gWrapperStore.end())
+        return R->second;
+
+      std::string wrapper_name;
+      std::string wrapper_code;
+
+      if (get_aggregate_ctor_wrapper_code(I, T, ATs, wrapper_name, wrapper_code) == 0)
+        return (Ret)nullptr;
+
+      //
+      //   Compile the wrapper code.
+      //
+      bool withAccessControl = true;
+      void *wrapper = compile_wrapper<K>(I, wrapper_name, wrapper_code,
+                                         withAccessControl);
+      if (!wrapper) {
+        llvm::errs() << "TClingCallFunc::make_wrapper"
+                     << ":"
+                     << "Failed to compile\n"
+                     << "==== SOURCE BEGIN ====\n"
+                     << wrapper_code << "\n"
+                     << "==== SOURCE END ====\n";
+      }
+      LLVM_DEBUG(dbgs() << "Compiled '" << (wrapper ? "" : "un")
+                 << "successfully:\n" << wrapper_code << "'\n");
+      return (Ret)wrapper;
     }
 
     // FIXME: Sink in the code duplication from get_wrapper_code.
@@ -3647,6 +3765,21 @@ namespace Cpp {
       QualType CT = QualType::getFromOpaquePtr(type);
       QualType AT = QualType::getFromOpaquePtr(arg_type);
       if (auto* Wrapper = make_builtin_ctor_wrapper<WrapperKind::Aot>(getInterp(), CT, AT)) {
+        return *Wrapper;
+      }
+      // FIXME: else error we failed to compile the wrapper.
+      return {};
+    }
+
+    AotCall MakeAggregateInitializationAotCallable(TCppType_t type,
+                                                   const std::vector<TemplateArgInfo>& arg_types) {
+      QualType T = QualType::getFromOpaquePtr(type);
+      std::vector<QualType> ATs;
+      ATs.reserve(arg_types.size());
+      for(auto MT : arg_types) {
+        ATs.emplace_back(QualType::getFromOpaquePtr(MT.m_Type));
+      }
+      if (auto Wrapper = make_aggregate_ctor_wrapper<WrapperKind::Aot>(getInterp(), T, ATs)) {
         return *Wrapper;
       }
       // FIXME: else error we failed to compile the wrapper.
