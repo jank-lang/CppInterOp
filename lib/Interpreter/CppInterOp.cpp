@@ -1941,6 +1941,12 @@ namespace Cpp {
 
     enum EReferenceType { kNotReference, kLValueReference, kRValueReference };
 
+    enum class WrapperKind
+    {
+      Aot,
+      Jit
+    };
+
     // Start of JitCall Helper Functions
 
 #define DEBUG_TYPE "jitcall"
@@ -1953,6 +1959,7 @@ namespace Cpp {
         buf << kIndentString;
     }
 
+    template <WrapperKind K = WrapperKind::Jit>
     void *compile_wrapper(compat::Interpreter& I,
                           const std::string& wrapper_name,
                           const std::string& wrapper,
@@ -1960,6 +1967,21 @@ namespace Cpp {
       LLVM_DEBUG(dbgs() << "Compiling '" << wrapper_name << "'\n");
       return I.compileFunction(wrapper_name, wrapper, false /*ifUnique*/,
                                 withAccessControl);
+    }
+
+    template <>
+    void *compile_wrapper<WrapperKind::Aot>(compat::Interpreter& I,
+                                            const std::string& wrapper_name,
+                                            const std::string& wrapper,
+                                            bool withAccessControl) {
+      LLVM_DEBUG(dbgs() << "Compiling '" << wrapper_name << "'\n");
+
+      auto PTU = I.Parse(wrapper);
+      if (!PTU)
+      {
+        return 0;
+      }
+      return new AotCall{ PTU->TheModule.release(), wrapper_name };
     }
 
     void get_type_as_string(QualType QT, std::string& type_name, ASTContext& C,
@@ -1984,7 +2006,7 @@ namespace Cpp {
       //  Collect information about the type of a function parameter
       //  needed for building the wrapper function.
       //
-      ASTContext& C = FD->getASTContext();
+      ASTContext& C = FD ? FD->getASTContext() : getSema().getASTContext();
       PrintingPolicy Policy(C.getPrintingPolicy());
 #if CLANG_VERSION_MAJOR > 16
       Policy.SuppressElaboration = true;
@@ -2094,7 +2116,7 @@ namespace Cpp {
       callbuf << ")";
     }
 
-    const DeclContext* get_non_transparent_decl_context(const FunctionDecl* FD) {
+    const DeclContext* get_non_transparent_decl_context(const Decl* FD) {
       auto *DC = FD->getDeclContext();
       while (DC->isTransparentContext()) {
         DC = DC->getParent();
@@ -2740,6 +2762,7 @@ namespace Cpp {
         // buf << '_' << mn;
         buf << '_' << gWrapperSerial++;
         wrapper_name = buf.str();
+        LLVM_DEBUG(dbgs() << "Wrapper name (FD): " << wrapper_name << "\n");
       }
       //
       //  Write the wrapper code.
@@ -2791,19 +2814,168 @@ namespace Cpp {
       return 1;
     }
 
-    JitCall::GenericCall make_wrapper(compat::Interpreter& I,
-                                      const FunctionDecl* FD) {
-      static std::map<const FunctionDecl*, void *> gWrapperStore;
+    int get_wrapper_code(compat::Interpreter& I, const FieldDecl* FD,
+                         std::string& wrapper_name, std::string& wrapper) {
+      assert(FD && "generate_wrapper called without a field decl!");
+      ASTContext& Context = FD->getASTContext();
+      PrintingPolicy Policy(Context.getPrintingPolicy());
+      //
+      //  Get the class or namespace name.
+      //
+      std::string class_name;
+      const clang::DeclContext* DC = get_non_transparent_decl_context(FD);
+      if (const TypeDecl* TD = dyn_cast<TypeDecl>(DC)) {
+        // This is a class, struct, or union member.
+        QualType QT(TD->getTypeForDecl(), 0);
+        get_type_as_string(QT, class_name, Context, Policy);
+      } else if (const NamedDecl* ND = dyn_cast<NamedDecl>(DC)) {
+        // This is a namespace member.
+        raw_string_ostream stream(class_name);
+        ND->getNameForDiagnostic(stream, Policy, /*Qualified=*/true);
+        stream.flush();
+      }
+      //
+      //  Make the wrapper name.
+      //
+      {
+        std::ostringstream buf;
+        buf << "__cf";
+        // const NamedDecl* ND = dyn_cast<NamedDecl>(FD);
+        // std::string mn;
+        // fInterp->maybeMangleDeclName(ND, mn);
+        // buf << '_' << mn;
+        buf << '_' << gWrapperSerial++;
+        wrapper_name = buf.str();
+        LLVM_DEBUG(dbgs() << "Wrapper name (FD): " << wrapper_name << "\n");
+      }
+      //
+      //  Write the wrapper code.
+      // FIXME: this should be synthesized into the AST!
+      //
+      int indent_level = 0;
+      std::ostringstream buf;
+      buf << "#pragma clang diagnostic push\n"
+             "#pragma clang diagnostic ignored \"-Wformat-security\"\n"
+             "__attribute__((used)) "
+             "__attribute__((annotate(\"__cling__ptrcheck(off)\")))\n"
+             "extern \"C\" "
+             "[[gnu::always_inline]]\n"
+             "inline void ";
+      buf << wrapper_name;
+      buf << "([[gnu::nonnull]] void* obj, int nargs, void** args, [[gnu::nonnull]] void* ret)\n"
+             "{\n";
+      ++indent_level;
+      indent(buf, indent_level);
+
+      // Make a code string that follows this pattern:
+      //
+      // new (ret) (FieldType*) (&((foo*)obj)->field);
+      //
+      buf << "new (ret) ";
+      {
+        QualType Ty = FD->getType();
+        QualType QT = Ty.getCanonicalType();
+        std::string type;
+        ASTContext& C = FD->getASTContext();
+        get_type_as_string(QT, type, C, C.getPrintingPolicy());
+        buf << "(" << type << "*) ";
+      }
+      {
+        const RecordDecl* RD = FD->getParent();
+        buf << "(&((";
+        buf << RD->getQualifiedNameAsString();
+        buf << "*)obj)->";
+      }
+      buf << FD->getName().str();
+      buf << ");\n";
+
+      --indent_level;
+      buf << "}\n"
+             "#pragma clang diagnostic pop";
+      wrapper = buf.str();
+      return 1;
+    }
+
+    int get_wrapper_code(compat::Interpreter& I, const VarDecl* VD,
+                         std::string& wrapper_name, std::string& wrapper) {
+      assert(VD && "generate_wrapper called without a var decl!");
+      ASTContext& Context = VD->getASTContext();
+      PrintingPolicy Policy(Context.getPrintingPolicy());
+      //
+      //  Make the wrapper name.
+      //
+      {
+        std::ostringstream buf;
+        buf << "__cf";
+        // const NamedDecl* ND = dyn_cast<NamedDecl>(FD);
+        // std::string mn;
+        // fInterp->maybeMangleDeclName(ND, mn);
+        // buf << '_' << mn;
+        buf << '_' << gWrapperSerial++;
+        wrapper_name = buf.str();
+        LLVM_DEBUG(dbgs() << "Wrapper name (VD): " << wrapper_name << "\n");
+      }
+      //
+      //  Write the wrapper code.
+      // FIXME: this should be synthesized into the AST!
+      //
+      int indent_level = 0;
+      std::ostringstream buf;
+      buf << "__attribute__((used)) "
+             "__attribute__((annotate(\"__cling__ptrcheck(off)\")))\n"
+             "extern \"C\" "
+             "[[gnu::always_inline]]\n"
+             "inline void ";
+      buf << wrapper_name;
+      buf << "(void*, int, void**, [[gnu::nonnull]] void* ret)\n"
+             "{\n";
+      ++indent_level;
+      indent(buf, indent_level);
+
+      // Make a code string that follows this pattern:
+      //
+      // new (ret) (VarType)(VarScope::var);
+      //
+      buf << "new (ret) ";
+      {
+        ASTContext& C = VD->getASTContext();
+        QualType Ty = VD->getType();
+        QualType QT = Ty.getCanonicalType();
+        bool R = QT->isReferenceType();
+        if(R) {
+          QT = C.getPointerType(QT.getNonReferenceType());
+        }
+        std::string type;
+        get_type_as_string(QT, type, C, C.getPrintingPolicy());
+        buf << "(" << type << ")(";
+        if(R) {
+          buf << "&";
+        }
+      }
+      buf << VD->getQualifiedNameAsString();
+      buf << ");\n";
+
+      --indent_level;
+      buf << "}\n";
+      wrapper = buf.str();
+      return 1;
+    }
+
+    template <WrapperKind K = WrapperKind::Jit>
+    auto make_wrapper(compat::Interpreter& I,
+                      const FunctionDecl* FD) {
+      using Ret = std::conditional_t<K == WrapperKind::Jit, JitCall::GenericCall, AotCall*>;
+      static std::map<const FunctionDecl*, Ret> gWrapperStore;
 
       auto R = gWrapperStore.find(FD);
       if (R != gWrapperStore.end())
-        return (JitCall::GenericCall) R->second;
+        return R->second;
 
       std::string wrapper_name;
       std::string wrapper_code;
 
       if (get_wrapper_code(I, FD, wrapper_name, wrapper_code) == 0)
-        return 0;
+        return (Ret)nullptr;
 
       //
       //   Compile the wrapper code.
@@ -2812,10 +2984,10 @@ namespace Cpp {
       // We should be able to call private default constructors.
       if (auto Ctor = dyn_cast<CXXConstructorDecl>(FD))
         withAccessControl = !Ctor->isDefaultConstructor();
-      void *wrapper = compile_wrapper(I, wrapper_name, wrapper_code,
-                                      withAccessControl);
+      void *wrapper = compile_wrapper<K>(I, wrapper_name, wrapper_code,
+                                         withAccessControl);
       if (wrapper) {
-        gWrapperStore.insert(std::make_pair(FD, wrapper));
+        gWrapperStore.insert(std::make_pair(FD, (Ret)wrapper));
       } else {
         llvm::errs() << "TClingCallFunc::make_wrapper"
                      << ":"
@@ -2824,6 +2996,85 @@ namespace Cpp {
                      << wrapper_code << "\n"
                      << "==== SOURCE END ====\n";
       }
+      LLVM_DEBUG(dbgs() << "Compiled '" << (wrapper ? "" : "un")
+                 << "successfully:\n" << wrapper_code << "'\n");
+      return (Ret)wrapper;
+    }
+
+    template <WrapperKind K>
+    auto make_wrapper(compat::Interpreter& I,
+                      const FieldDecl* FD) {
+      using Ret = std::conditional_t<K == WrapperKind::Jit, JitCall::GenericCall, AotCall*>;
+      static std::map<const FieldDecl*, Ret> gWrapperStore;
+
+      auto R = gWrapperStore.find(FD);
+      if (R != gWrapperStore.end())
+        return R->second;
+
+      std::string wrapper_name;
+      std::string wrapper_code;
+
+      if (get_wrapper_code(I, FD, wrapper_name, wrapper_code) == 0)
+        return (Ret)nullptr;
+
+      //
+      //   Compile the wrapper code.
+      //
+      bool withAccessControl = true;
+      void *wrapper = compile_wrapper<K>(I, wrapper_name, wrapper_code,
+                                         withAccessControl);
+      if (wrapper) {
+        gWrapperStore.insert(std::make_pair(FD, (Ret)wrapper));
+      } else {
+        llvm::errs() << "TClingCallFunc::make_wrapper"
+                     << ":"
+                     << "Failed to compile\n"
+                     << "==== SOURCE BEGIN ====\n"
+                     << wrapper_code << "\n"
+                     << "==== SOURCE END ====\n";
+      }
+      LLVM_DEBUG(dbgs() << "Compiled '" << (wrapper ? "" : "un")
+                 << "successfully:\n" << wrapper_code << "'\n");
+      return (Ret)wrapper;
+    }
+
+    template <WrapperKind K>
+    auto make_wrapper(compat::Interpreter& I,
+                      const VarDecl* VD) {
+      using Ret = std::conditional_t<K == WrapperKind::Jit, JitCall::GenericCall, AotCall*>;
+      static std::map<const VarDecl*, Ret> gWrapperStore;
+
+      auto R = gWrapperStore.find(VD);
+      if (R != gWrapperStore.end())
+        return R->second;
+
+      std::string wrapper_name;
+      std::string wrapper_code;
+
+      if (get_wrapper_code(I, VD, wrapper_name, wrapper_code) == 0)
+        return (Ret)nullptr;
+
+      //
+      //   Compile the wrapper code.
+      //
+      bool withAccessControl = true;
+      void *wrapper = compile_wrapper<K>(I, wrapper_name, wrapper_code,
+                                         withAccessControl);
+      if (wrapper) {
+        gWrapperStore.insert(std::make_pair(VD, (Ret)wrapper));
+      } else {
+        llvm::errs() << "TClingCallFunc::make_wrapper"
+                     << ":"
+                     << "Failed to compile\n"
+                     << "==== SOURCE BEGIN ====\n"
+                     << wrapper_code << "\n"
+                     << "==== SOURCE END ====\n";
+      }
+      LLVM_DEBUG(dbgs() << "Compiled '" << (wrapper ? "" : "un")
+                 << "successfully:\n" << wrapper_code << "'\n");
+      return (Ret)wrapper;
+    }
+
       LLVM_DEBUG(dbgs() << "Compiled '" << (wrapper ? "" : "un")
                  << "successfully:\n" << wrapper_code << "'\n");
       return (JitCall::GenericCall)wrapper;
@@ -2874,8 +3125,9 @@ namespace Cpp {
       return wrapper_name;
     }
 
-    static JitCall::DestructorCall make_dtor_wrapper(compat::Interpreter& interp,
-                                                              const Decl *D) {
+    template <WrapperKind K = WrapperKind::Jit>
+    static auto make_dtor_wrapper(compat::Interpreter& interp,
+                                  const Decl *D) {
       // Make a code string that follows this pattern:
       //
       // void
@@ -2904,11 +3156,12 @@ namespace Cpp {
       //
       //--
 
-      static map<const Decl *, void *> gDtorWrapperStore;
+      using Ret = std::conditional_t<K == WrapperKind::Jit, JitCall::DestructorCall, AotCall*>;
+      static map<const Decl *, Ret> gDtorWrapperStore;
 
       auto I = gDtorWrapperStore.find(D);
       if (I != gDtorWrapperStore.end())
-        return (JitCall::DestructorCall) I->second;
+        return I->second;
 
       //
       //  Make the wrapper name.
@@ -3005,10 +3258,10 @@ namespace Cpp {
       //
       //  Compile the wrapper code.
       //
-      void *F = compile_wrapper(interp, wrapper_name, wrapper,
-                                /*withAccessControl=*/false);
+      void *F = compile_wrapper<K>(interp, wrapper_name, wrapper,
+                                   /*withAccessControl=*/false);
       if (F) {
-        gDtorWrapperStore.insert(make_pair(D, F));
+        gDtorWrapperStore.insert(make_pair(D, (Ret)F));
       } else {
         llvm::errs() << "make_dtor_wrapper"
                      << "Failed to compile\n"
@@ -3018,7 +3271,7 @@ namespace Cpp {
       }
       LLVM_DEBUG(dbgs() << "Compiled '" << (F ? "" : "un")
                  << "successfully:\n" << wrapper << "'\n");
-      return (JitCall::DestructorCall)F;
+      return (Ret)F;
     }
 #undef DEBUG_TYPE
     } // namespace
@@ -3049,6 +3302,54 @@ namespace Cpp {
 
     CPPINTEROP_API JitCall MakeFunctionCallable(TCppConstFunction_t func) {
       return MakeFunctionCallable(&getInterp(), func);
+    }
+
+    CPPINTEROP_API AotCall MakeAotCallable(TInterp_t I,
+                                           TCppScope_t scope) {
+      const auto* D = static_cast<const clang::Decl*>(scope);
+      if (!D)
+        return {};
+
+      auto* interp = static_cast<compat::Interpreter*>(I);
+
+      // FIXME: Unify with make_wrapper.
+      if (const auto* Dtor = dyn_cast<CXXDestructorDecl>(D)) {
+        if (auto Wrapper = make_dtor_wrapper<WrapperKind::Aot>(*interp, Dtor->getParent()))
+          return *Wrapper;
+        // FIXME: else error we failed to compile the wrapper.
+        return {};
+      }
+
+      if (const auto* F = dyn_cast<FunctionDecl>(D)) {
+        if (auto Wrapper = make_wrapper<WrapperKind::Aot>(*interp, F)) {
+          return *Wrapper;
+        }
+        // FIXME: else error we failed to compile the wrapper.
+        return {};
+      }
+
+      if (const auto* F = dyn_cast<FieldDecl>(D)) {
+        if (auto Wrapper = make_wrapper<WrapperKind::Aot>(*interp, F)) {
+          return *Wrapper;
+        }
+        // FIXME: else error we failed to compile the wrapper.
+        return {};
+      }
+
+      if (const auto* V = dyn_cast<VarDecl>(D)) {
+        if (auto Wrapper = make_wrapper<WrapperKind::Aot>(*interp, V)) {
+          return *Wrapper;
+        }
+        // FIXME: else error we failed to compile the wrapper.
+        return {};
+      }
+
+      // FIXME: else error we failed to compile the wrapper.
+      return {};
+    }
+
+    CPPINTEROP_API AotCall MakeAotCallable(TCppScope_t scope) {
+      return MakeAotCallable(&getInterp(), scope);
     }
 
   namespace {

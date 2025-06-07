@@ -36,6 +36,7 @@ namespace Cpp {
   using TCppFuncAddr_t = void*;
   using TInterp_t = void*;
   using TCppObject_t = void*;
+  using TModule_t = void*;
 
   enum Operator {
     OP_None,
@@ -182,6 +183,23 @@ namespace Cpp {
 #endif // NDEBUG
       m_DestructorCall(object, nary, withFree);
     }
+  };
+
+  class AotCall {
+  public:
+    AotCall() = default;
+    AotCall(TModule_t M, const std::string& N)
+      : m_module(M), m_name(N) {}
+
+    TModule_t getModule() const { return m_module; }
+    const std::string& getName() const { return m_name; }
+    bool isValid() const { return m_module; }
+    bool isInvalid() const { return !isValid(); }
+    explicit operator bool() const { return isValid(); }
+
+  private:
+    TModule_t m_module{};
+    std::string m_name;
   };
 
   ///\returns the version string information of the library.
@@ -600,6 +618,13 @@ namespace Cpp {
 
   CPPINTEROP_API JitCall MakeFunctionCallable(TInterp_t I,
                                               TCppConstFunction_t func);
+
+  /// Creates a trampoline function by using the interpreter and returns a
+  /// uniform interface to get the name and IR module for it.
+  CPPINTEROP_API AotCall MakeAotCallable(TCppScope_t scope);
+
+  CPPINTEROP_API AotCall MakeAotCallable(TInterp_t I,
+                                         TCppScope_t scope);
 
   /// Checks if a function declared is of const type or not.
   CPPINTEROP_API bool IsConstMethod(TCppFunction_t method);
