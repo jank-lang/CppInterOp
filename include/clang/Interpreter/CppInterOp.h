@@ -580,6 +580,12 @@ namespace Cpp {
   /// Checks if type is a pointer
   CPPINTEROP_API bool IsPointerType(TCppType_t type);
 
+  /// Checks if type is an array
+  CPPINTEROP_API bool IsArrayType(TCppType_t type);
+
+  /// Get the element type of an array
+  CPPINTEROP_API TCppType_t GetArrayElementType(TCppType_t type);
+
   /// Get the underlying pointee type
   CPPINTEROP_API TCppType_t GetPointeeType(TCppType_t type);
 

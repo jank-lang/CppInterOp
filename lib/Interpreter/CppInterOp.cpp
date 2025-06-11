@@ -1762,6 +1762,40 @@ namespace Cpp {
     return QT->isPointerType();
   }
 
+  bool IsArrayType(TCppType_t type) {
+    QualType QT = QualType::getFromOpaquePtr(type);
+    return QT->isArrayType();
+  }
+
+  TCppType_t GetArrayElementType(TCppType_t type) {
+    QualType QT = QualType::getFromOpaquePtr(type);
+    ASTContext &Ctx = getASTContext();
+
+    QualType ElemTy;
+    if (auto *CAT = Ctx.getAsConstantArrayType(QT)) {
+      // e.g. int[10]
+      ElemTy = CAT->getElementType();
+    }
+    else if (auto *IAT = Ctx.getAsIncompleteArrayType(QT)) {
+      // e.g. extern int[]
+      ElemTy = IAT->getElementType();
+    }
+    else if (auto *DSAT = Ctx.getAsDependentSizedArrayType(QT)) {
+      // e.g. T[N] where N is a dependent expression
+      ElemTy = DSAT->getElementType();
+    }
+    else if (auto *VAT = Ctx.getAsVariableArrayType(QT)) {
+      // e.g. int arr[n]; where n is runtime
+      ElemTy = VAT->getElementType();
+    }
+    else {
+      // Not an array type
+      return nullptr;
+    }
+
+    return ElemTy.getAsOpaquePtr();
+  }
+
   TCppType_t GetPointeeType(TCppType_t type) {
     if (!IsPointerType(type))
       return nullptr;
@@ -2909,7 +2943,7 @@ namespace Cpp {
         // buf << '_' << mn;
         buf << '_' << gWrapperSerial++;
         wrapper_name = buf.str();
-        LLVM_DEBUG(dbgs() << "Wrapper name (VD): " << wrapper_name << "\n");
+        LLVM_DEBUG(dbgs() << "Wrapper name (var decl): " << wrapper_name << "\n");
       }
       //
       //  Write the wrapper code.
@@ -2940,6 +2974,10 @@ namespace Cpp {
         bool R = QT->isReferenceType();
         if(R) {
           QT = C.getPointerType(QT.getNonReferenceType());
+        }
+        bool A = QT->isArrayType();
+        if(A) {
+          QT = C.getArrayDecayedType(QT);
         }
         std::string type;
         get_type_as_string(QT, type, C, C.getPrintingPolicy());
@@ -2979,6 +3017,7 @@ namespace Cpp {
       int indent_level = 0;
       std::ostringstream typedefbuf;
       std::ostringstream buf;
+      std::ostringstream exprbuf;
       buf << "__attribute__((used)) "
              "__attribute__((annotate(\"__cling__ptrcheck(off)\")))\n"
              "extern \"C\" "
@@ -2998,34 +3037,38 @@ namespace Cpp {
       //
       // new (ret) (CT)();
       //
-      buf << "new (ret) ";
+      exprbuf << "new (ret) ";
       {
         QualType QT = CT.getCanonicalType();
         std::string type;
         get_type_as_string(QT, type, Context, Context.getPrintingPolicy());
-        buf << "(" << type << ")(";
+        exprbuf << "(" << type << ")(";
       }
       if(!AT.isNull()) {
         QualType QT = AT.getCanonicalType();
         std::string type_name;
         EReferenceType refType = kNotReference;
         bool isPointer = false;
-        collect_type_info(nullptr, QT, typedefbuf, buf, type_name, refType,
+        collect_type_info(nullptr, QT, typedefbuf, exprbuf, type_name, refType,
                           isPointer, indent_level, true);
 
         if (refType != kNotReference) {
-          buf << "(" << type_name.c_str()
+          exprbuf << "(" << type_name.c_str()
                   << (refType == kLValueReference ? "&" : "&&") << ")*("
                   << type_name.c_str() << "*)args[0]";
         } else if (isPointer) {
-          buf << "*(" << type_name.c_str() << "**)args[0]";
+          exprbuf << "*(" << type_name.c_str() << "**)args[0]";
         } else {
           // pointer falls back to non-pointer case; the argument preserves
           // the "pointerness" (i.e. doesn't reference the value).
-          buf << "*(" << type_name.c_str() << "*)args[0]";
+          exprbuf << "*(" << type_name.c_str() << "*)args[0]";
         }
       }
-      buf << ");\n";
+      exprbuf << ");\n";
+
+      buf << typedefbuf.str();
+      indent(buf, indent_level);
+      buf << exprbuf.str();
 
       --indent_level;
       buf << "}\n";
@@ -3056,6 +3099,7 @@ namespace Cpp {
       int indent_level = 0;
       std::ostringstream typedefbuf;
       std::ostringstream buf;
+      std::ostringstream exprbuf;
       static std::string helper_name;
 
       if(helper_name.empty()) {
@@ -3113,32 +3157,35 @@ namespace Cpp {
       //
       // new (ret) bool{ helper<T, A1, A2, A3>() };
       //
-      buf << "new (ret) bool{ " << helper_name << "<";
+      exprbuf << "new (ret) bool{ " << helper_name << "<";
       {
         QualType QT = T.getCanonicalType();
         std::string type;
         get_type_as_string(QT, type, Context, Context.getPrintingPolicy());
-        buf << type;
+        exprbuf << type;
       }
 
       for(const auto& AT: ATs) {
-        buf << ", ";
+        exprbuf << ", ";
         QualType QT = AT.getCanonicalType();
         std::string type_name;
         EReferenceType refType = kNotReference;
         bool isPointer = false;
-        collect_type_info(nullptr, QT, typedefbuf, buf, type_name, refType,
+        collect_type_info(nullptr, QT, typedefbuf, exprbuf, type_name, refType,
                           isPointer, indent_level, true);
 
         if (refType != kNotReference) {
-          buf << type_name.c_str() << (refType == kLValueReference ? "&" : "&&");
+          exprbuf << type_name.c_str() << (refType == kLValueReference ? "&" : "&&");
         } else if (isPointer) {
-          buf << type_name.c_str() << "*";
+          exprbuf << type_name.c_str() << "*";
         } else {
-          buf << type_name.c_str();
+          exprbuf << type_name.c_str();
         }
       }
-      buf << ">() };\n";
+      exprbuf << ">() };\n";
+
+      buf << typedefbuf.str() << '\n' << exprbuf.str() << '\n';
+
       --indent_level;
       indent(buf, indent_level);
       buf << "}\n";
@@ -3169,6 +3216,7 @@ namespace Cpp {
       int indent_level = 0;
       std::ostringstream typedefbuf;
       std::ostringstream buf;
+      std::ostringstream exprbuf;
       buf << "__attribute__((used)) "
              "__attribute__((annotate(\"__cling__ptrcheck(off)\")))\n"
              "extern \"C\" "
@@ -3188,18 +3236,18 @@ namespace Cpp {
       //
       // new (ret) (CT){};
       //
-      buf << "new (ret) ";
+      exprbuf << "new (ret) ";
       {
         QualType QT = T.getCanonicalType();
         std::string type;
         get_type_as_string(QT, type, Context, Context.getPrintingPolicy());
-        buf << "(" << type << "){";
+        exprbuf << "(" << type << "){";
       }
 
       bool Comma = false;
       for (unsigned i = 0U; i < ATs.size(); ++i) {
         if(Comma) {
-          buf << ", ";
+          exprbuf << ", ";
         }
         Comma = true;
 
@@ -3207,22 +3255,24 @@ namespace Cpp {
         std::string type_name;
         EReferenceType refType = kNotReference;
         bool isPointer = false;
-        collect_type_info(nullptr, QT, typedefbuf, buf, type_name, refType,
+        collect_type_info(nullptr, QT, typedefbuf, exprbuf, type_name, refType,
                           isPointer, indent_level, true);
 
         if (refType != kNotReference) {
-          buf << "(" << type_name.c_str()
+          exprbuf << "(" << type_name.c_str()
                   << (refType == kLValueReference ? "&" : "&&") << ")*("
                   << type_name.c_str() << "*)args[" << i << "]";
         } else if (isPointer) {
-          buf << "*(" << type_name.c_str() << "**)args[" << i << "]";
+          exprbuf << "*(" << type_name.c_str() << "**)args[" << i << "]";
         } else {
           // pointer falls back to non-pointer case; the argument preserves
           // the "pointerness" (i.e. doesn't reference the value).
-          buf << "*(" << type_name.c_str() << "*)args[" << i << "]";
+          exprbuf << "*(" << type_name.c_str() << "*)args[" << i << "]";
         }
       }
-      buf << "};\n";
+      exprbuf << "};\n";
+
+      buf << typedefbuf.str() << '\n' << exprbuf.str() << '\n';
 
       --indent_level;
       buf << "}\n";
@@ -3253,6 +3303,7 @@ namespace Cpp {
       int indent_level = 0;
       std::ostringstream typedefbuf;
       std::ostringstream buf;
+      std::ostringstream exprbuf;
       buf << "__attribute__((used)) "
              "__attribute__((annotate(\"__cling__ptrcheck(off)\")))\n"
              "extern \"C\" "
@@ -3302,52 +3353,64 @@ namespace Cpp {
       }
 
       if(!assignment) {
-        buf << "new (ret) ";
+        exprbuf << "new (ret) ";
         {
           QualType QT = T.getCanonicalType();
+          bool A = QT->isArrayType();
+          if(A) {
+            QT = C.getArrayDecayedType(QT);
+          }
           std::string type;
           get_type_as_string(QT, type, Context, Context.getPrintingPolicy());
-          buf << "(" << type << "){";
+          exprbuf << "(" << type << "){";
         }
       }
 
-      buf << "(";
+      exprbuf << "(";
       if(ATs.size() == 1) {
-        buf << OpNameStr;
+        exprbuf << OpNameStr;
       }
       for (unsigned i = 0U; i < ATs.size(); ++i) {
         if(i == 1) {
-          buf << " " << OpNameStr << " ";
+          exprbuf << " " << OpNameStr << " ";
         }
 
         QualType QT = ATs[i].getCanonicalType();
+        bool A = QT->isArrayType();
+        if(A) {
+          QT = C.getArrayDecayedType(QT);
+        }
         std::string type_name;
         EReferenceType refType = kNotReference;
         bool isPointer = false;
-        collect_type_info(nullptr, QT, typedefbuf, buf, type_name, refType,
+        collect_type_info(nullptr, QT, typedefbuf, exprbuf, type_name, refType,
                           isPointer, indent_level, true);
 
         if (refType != kNotReference) {
-          buf << "(" << type_name.c_str()
+          exprbuf << "(" << type_name.c_str()
                   << (refType == kLValueReference ? "&" : "&&") << ")*("
                   << type_name.c_str() << "*)args[" << i << "]";
         } else if (isPointer) {
-          buf << "*(" << type_name.c_str() << "**)args[" << i << "]";
+          exprbuf << "*(" << type_name.c_str() << "**)args[" << i << "]";
         } else {
           // pointer falls back to non-pointer case; the argument preserves
           // the "pointerness" (i.e. doesn't reference the value).
-          buf << "*(" << type_name.c_str() << "*)args[" << i << "]";
+          exprbuf << "*(" << type_name.c_str() << "*)args[" << i << "]";
         }
       }
-      buf << ")";
+      exprbuf << ")";
 
       if(!assignment) {
-        buf << " };\n";
+        exprbuf << " };\n";
       } else {
-        buf << ";\n";
+        exprbuf << ";\n";
       }
 
-      --indent_level;
+      buf << typedefbuf.str();
+      indent(buf, indent_level);
+      buf << exprbuf.str();
+
+      indent(buf, --indent_level);
       buf << "}\n";
       wrapper = buf.str();
       return 1;
