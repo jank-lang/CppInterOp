@@ -3322,28 +3322,6 @@ namespace Cpp {
       //
       // Binary:
       // new (ret) (T){*(AT0*)args[0] op *(AT1*)args[1]};
-      //
-      // Or, if the operator is an assignment, follow this pattern:
-      //
-      // Binary:
-      // (*(AT0*)args[0]) op (*(AT1*)args[1]);
-
-      bool assignment = false;
-      switch(op) {
-        case OP_PlusEqual:
-        case OP_MinusEqual:
-        case OP_StarEqual:
-        case OP_SlashEqual:
-        case OP_PercentEqual:
-        case OP_CaretEqual:
-        case OP_AmpEqual:
-        case OP_PipeEqual:
-        case OP_LessLessEqual:
-        case OP_GreaterGreaterEqual:
-        case OP_Equal:
-          assignment = true;
-          break;
-      }
 
       ASTContext& C = getSema().getASTContext();
       DeclarationName OpName = C.DeclarationNames.getCXXOperatorName((OverloadedOperatorKind)op);
@@ -3352,18 +3330,16 @@ namespace Cpp {
         OpNameStr.erase(0, strlen("operator"));
       }
 
-      if(!assignment) {
-        exprbuf << "new (ret) ";
-        {
-          QualType QT = T.getCanonicalType();
-          bool A = QT->isArrayType();
-          if(A) {
-            QT = C.getArrayDecayedType(QT);
-          }
-          std::string type;
-          get_type_as_string(QT, type, Context, Context.getPrintingPolicy());
-          exprbuf << "(" << type << "){";
+      exprbuf << "new (ret) ";
+      {
+        QualType QT = T.getCanonicalType();
+        bool A = QT->isArrayType();
+        if(A) {
+          QT = C.getArrayDecayedType(QT);
         }
+        std::string type;
+        get_type_as_string(QT, type, Context, Context.getPrintingPolicy());
+        exprbuf << "(" << type << "){";
       }
 
       exprbuf << "(";
@@ -3399,12 +3375,7 @@ namespace Cpp {
         }
       }
       exprbuf << ")";
-
-      if(!assignment) {
-        exprbuf << " };\n";
-      } else {
-        exprbuf << ";\n";
-      }
+      exprbuf << " };\n";
 
       buf << typedefbuf.str();
       indent(buf, indent_level);
