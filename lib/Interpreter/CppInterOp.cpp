@@ -995,7 +995,7 @@ namespace Cpp {
     R.resolveKind();
 
     for (auto *Found : R)
-      if (llvm::isa<FunctionDecl>(Found))
+      if (llvm::isa<FunctionDecl>(Found) || llvm::isa<FunctionTemplateDecl>(Found))
         funcs.push_back(Found);
 
     return funcs;
