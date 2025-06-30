@@ -290,6 +290,8 @@ namespace Cpp {
   CPPINTEROP_API bool IsAggregateConstructible(TCppType_t to_type,
                                                const std::vector<TemplateArgInfo> &member_types);
 
+  CPPINTEROP_API bool IsTriviallyDestructible(TCppType_t type);
+
   /// Checks if it is an enum name (EnumDecl represents an enum name).
   CPPINTEROP_API bool IsEnumScope(TCppScope_t handle);
 

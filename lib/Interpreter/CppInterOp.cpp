@@ -3864,6 +3864,15 @@ namespace Cpp {
       return false;
     }
 
+    bool IsTriviallyDestructible(TCppType_t type) {
+      QualType T = QualType::getFromOpaquePtr(type).getDesugaredType(getASTContext());
+
+      if (const auto *RD = T->getAsCXXRecordDecl()) {
+        return RD->hasTrivialDestructor();
+      }
+
+      return T.isDestructedType() == clang::QualType::DK_none;
+    }
 
     CPPINTEROP_API JitCall MakeFunctionCallable(TInterp_t I,
                                                 TCppConstFunction_t func) {
