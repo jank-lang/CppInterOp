@@ -3693,27 +3693,10 @@ namespace Cpp {
       // Make a code string that follows this pattern:
       //
       // void
-      // unique_wrapper_ddd(void* obj, unsigned long nary, int withFree)
+      // unique_wrapper_ddd(void* obj, void *client_data)
       // {
-      //    if (withFree) {
-      //       if (!nary) {
-      //          delete (ClassName*) obj;
-      //       }
-      //       else {
-      //          delete[] (ClassName*) obj;
-      //       }
-      //    }
-      //    else {
-      //       typedef ClassName DtorName;
-      //       if (!nary) {
-      //          ((ClassName*)obj)->~DtorName();
-      //       }
-      //       else {
-      //          for (unsigned long i = nary - 1; i > -1; --i) {
-      //             (((ClassName*)obj)+i)->~DtorName();
-      //          }
-      //       }
-      //    }
+      //   typedef ClassName DtorName;
+      //   ((ClassName*)obj)->~DtorName();
       // }
       //
       //--
@@ -3736,83 +3719,16 @@ namespace Cpp {
       int indent_level = 0;
       ostringstream buf;
       buf << "__attribute__((used)) ";
-      buf << "extern \"C\" void ";
+      buf << "extern \"C\" inline void ";
       buf << wrapper_name;
-      buf << "(void* obj, unsigned long nary, int withFree)\n";
+      buf << "([[gnu::nonnull]] void* obj, void*)\n";
       buf << "{\n";
-      //    if (withFree) {
-      //       if (!nary) {
-      //          delete (ClassName*) obj;
-      //       }
-      //       else {
-      //          delete[] (ClassName*) obj;
-      //       }
-      //    }
-      ++indent_level;
-      indent(buf, indent_level);
-      buf << "if (withFree) {\n";
-      ++indent_level;
-      indent(buf, indent_level);
-      buf << "if (!nary) {\n";
-      ++indent_level;
-      indent(buf, indent_level);
-      buf << "delete (" << class_name << "*) obj;\n";
-      --indent_level;
-      indent(buf, indent_level);
-      buf << "}\n";
-      indent(buf, indent_level);
-      buf << "else {\n";
-      ++indent_level;
-      indent(buf, indent_level);
-      buf << "delete[] (" << class_name << "*) obj;\n";
-      --indent_level;
-      indent(buf, indent_level);
-      buf << "}\n";
-      --indent_level;
-      indent(buf, indent_level);
-      buf << "}\n";
-      //    else {
-      //       typedef ClassName Nm;
-      //       if (!nary) {
-      //          ((Nm*)obj)->~Nm();
-      //       }
-      //       else {
-      //          for (unsigned long i = nary - 1; i > -1; --i) {
-      //             (((Nm*)obj)+i)->~Nm();
-      //          }
-      //       }
-      //    }
-      indent(buf, indent_level);
-      buf << "else {\n";
-      ++indent_level;
-      indent(buf, indent_level);
+      indent(buf, ++indent_level);
       buf << "typedef " << class_name << " Nm;\n";
-      buf << "if (!nary) {\n";
-      ++indent_level;
       indent(buf, indent_level);
       buf << "((Nm*)obj)->~Nm();\n";
-      --indent_level;
-      indent(buf, indent_level);
-      buf << "}\n";
-      indent(buf, indent_level);
-      buf << "else {\n";
-      ++indent_level;
-      indent(buf, indent_level);
-      buf << "do {\n";
-      ++indent_level;
-      indent(buf, indent_level);
-      buf << "(((Nm*)obj)+(--nary))->~Nm();\n";
-      --indent_level;
-      indent(buf, indent_level);
-      buf << "} while (nary);\n";
-      --indent_level;
-      indent(buf, indent_level);
-      buf << "}\n";
-      --indent_level;
-      indent(buf, indent_level);
-      buf << "}\n";
       // End wrapper.
-      --indent_level;
+      indent(buf, --indent_level);
       buf << "}\n";
       // Done.
       string wrapper(buf.str());
