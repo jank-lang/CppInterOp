@@ -3337,9 +3337,16 @@ namespace Cpp {
         if(A) {
           QT = C.getArrayDecayedType(QT);
         }
+        bool R = QT->isReferenceType();
+        if(R) {
+          QT = C.getPointerType(QT.getNonReferenceType());
+        }
         std::string type;
         get_type_as_string(QT, type, Context, Context.getPrintingPolicy());
         exprbuf << "(" << type << "){";
+        if(R) {
+          exprbuf << "&";
+        }
       }
 
       exprbuf << "(";
