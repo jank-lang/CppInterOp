@@ -2988,18 +2988,23 @@ namespace Cpp {
         ASTContext& C = VD->getASTContext();
         QualType Ty = VD->getType();
         QualType QT = Ty.getCanonicalType();
-        bool R = QT->isReferenceType();
-        if(R) {
-          QT = C.getPointerType(QT.getNonReferenceType());
-        }
+        bool P = QT->isPointerType();
         bool A = QT->isArrayType();
         if(A) {
           QT = C.getArrayDecayedType(QT);
         }
+        bool R = QT->isReferenceType();
+        /* A Clang bug prevents this from working.
+         * https://github.com/llvm/llvm-project/issues/146956
+         */
+        bool Static = VD->isStaticDataMember();
+        if((R || !P) && !A && !Static) {
+          QT = C.getPointerType(QT.getNonReferenceType());
+        }
         std::string type;
         get_type_as_string(QT, type, C, C.getPrintingPolicy());
         buf << "(" << type << ")(";
-        if(R) {
+        if(!P && !A && !Static) {
           buf << "&";
         }
       }
@@ -3350,18 +3355,18 @@ namespace Cpp {
       exprbuf << "new (ret) ";
       {
         QualType QT = T.getCanonicalType();
+        bool R = QT->isReferenceType();
+        QT = QT.getNonReferenceType();
         bool A = QT->isArrayType();
         if(A) {
           QT = C.getArrayDecayedType(QT);
-        }
-        bool R = QT->isReferenceType();
-        if(R) {
+        } else if(R) {
           QT = C.getPointerType(QT.getNonReferenceType());
         }
         std::string type;
         get_type_as_string(QT, type, Context, Context.getPrintingPolicy());
         exprbuf << "(" << type << "){";
-        if(R) {
+        if(R && !A) {
           exprbuf << "&";
         }
       }
