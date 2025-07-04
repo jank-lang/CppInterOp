@@ -1301,7 +1301,7 @@ namespace Cpp {
 
     SmallVector<Expr*, 8> args;
     for (unsigned i = 1; i < arg_types.size(); ++i) {
-      ImplicitValueInitExpr* e = new (C) ImplicitValueInitExpr{ QualType::getFromOpaquePtr(arg_types[i].m_Type) };
+      ImplicitValueInitExpr* e = new (C) ImplicitValueInitExpr{ QualType::getFromOpaquePtr(arg_types[i].m_Type).getNonReferenceType() };
       args.push_back(e);
     }
 
