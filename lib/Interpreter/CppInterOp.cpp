@@ -1741,6 +1741,16 @@ namespace Cpp {
     return false;
   }
 
+  bool IsStaticDatamember(TCppScope_t var)
+  {
+    auto *D = (Decl *) var;
+    if (auto *VD = llvm::cast_or_null<VarDecl>(D)) {
+      return VD->getStorageClass() == SC_Static;
+    }
+
+    return false;
+  }
+
   bool IsRecordType(TCppType_t type)
   {
     QualType QT = QualType::getFromOpaquePtr(type);

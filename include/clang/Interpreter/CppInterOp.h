@@ -573,6 +573,8 @@ namespace Cpp {
   /// Checks if the provided variable is a 'Constant' variable.
   CPPINTEROP_API bool IsConstVariable(TCppScope_t var);
 
+  CPPINTEROP_API bool IsStaticDatamember(TCppScope_t var);
+
   /// Checks if the provided parameter is a Record (struct).
   CPPINTEROP_API bool IsRecordType(TCppType_t type);
 
