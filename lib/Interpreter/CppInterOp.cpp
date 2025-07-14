@@ -375,7 +375,7 @@ namespace Cpp {
       ImplicitValueInitExpr* L = new (C) ImplicitValueInitExpr{ LHS };
       ImplicitValueInitExpr* R = new (C) ImplicitValueInitExpr{ RHS };
       ExprResult LRes(L), RRes(R);
-      QualType Common = S.UsualArithmeticConversions(LRes, RRes, SourceLocation(), Sema::ACK_Arithmetic);
+      QualType Common = S.UsualArithmeticConversions(LRes, RRes, SourceLocation(), ArithConvKind::Arithmetic);
       return Common.getAsOpaquePtr();
     }
 
@@ -408,7 +408,7 @@ namespace Cpp {
       return false;
 
     auto *TT = cast<TypeTraitExpr>(ER.get());
-    return TT->getValue();
+    return TT->getBoolValue();
   }
 
   bool IsEnumScope(TCppScope_t handle) {
@@ -1176,23 +1176,23 @@ namespace Cpp {
     auto* DC = clang::Decl::castToDeclContext(D);
     Cpp_utils::Lookup::Named(&S, R, DC);
 
-    if (R.getResultKind() == clang::LookupResult::NotFound && funcs.empty())
+    if (R.getResultKind() == clang::LookupResultKind::NotFound && funcs.empty())
       return false;
 
     // Distinct match, single Decl
-    else if (R.getResultKind() == clang::LookupResult::Found) {
+    else if (R.getResultKind() == clang::LookupResultKind::Found) {
       if (IsTemplatedFunction(R.getFoundDecl()))
         funcs.push_back(R.getFoundDecl());
     }
     // Loop over overload set
-    else if (R.getResultKind() == clang::LookupResult::FoundOverloaded) {
+    else if (R.getResultKind() == clang::LookupResultKind::FoundOverloaded) {
       for (auto* Found : R)
         if (IsTemplatedFunction(Found))
           funcs.push_back(Found);
     }
 
     // TODO: Handle ambiguously found LookupResult
-    // else if (R.getResultKind() == clang::LookupResult::Ambiguous) {
+    // else if (R.getResultKind() == clang::LookupResultKind::Ambiguous) {
     //  auto kind = R.getAmbiguityKind();
     //  ...
     //  Produce a diagnostic describing the ambiguity that resulted
@@ -2802,6 +2802,7 @@ namespace Cpp {
       //
       {
         std::ostringstream buf;
+        buf.imbue(std::locale("C"));
         buf << "__cf";
         // const NamedDecl* ND = dyn_cast<NamedDecl>(FD);
         // std::string mn;
@@ -2886,6 +2887,7 @@ namespace Cpp {
       //
       {
         std::ostringstream buf;
+        buf.imbue(std::locale("C"));
         buf << "__cf";
         // const NamedDecl* ND = dyn_cast<NamedDecl>(FD);
         // std::string mn;
@@ -2953,6 +2955,7 @@ namespace Cpp {
       //
       {
         std::ostringstream buf;
+        buf.imbue(std::locale("C"));
         buf << "__cf";
         // const NamedDecl* ND = dyn_cast<NamedDecl>(FD);
         // std::string mn;
@@ -3027,6 +3030,7 @@ namespace Cpp {
       //
       {
         std::ostringstream buf;
+        buf.imbue(std::locale("C"));
         buf << "__cf";
         buf << '_' << gWrapperSerial++;
         wrapper_name = buf.str();
@@ -3109,6 +3113,7 @@ namespace Cpp {
       //
       {
         std::ostringstream buf;
+        buf.imbue(std::locale("C"));
         buf << "__cf";
         buf << '_' << gWrapperSerial++;
         wrapper_name = buf.str();
@@ -3127,6 +3132,7 @@ namespace Cpp {
       if(helper_name.empty()) {
         {
           std::ostringstream buf;
+          buf.imbue(std::locale("C"));
           buf << "__cf";
           buf << '_' << gWrapperSerial++;
           helper_name = buf.str();
@@ -3226,6 +3232,7 @@ namespace Cpp {
       //
       {
         std::ostringstream buf;
+        buf.imbue(std::locale("C"));
         buf << "__cf";
         buf << '_' << gWrapperSerial++;
         wrapper_name = buf.str();
@@ -3313,6 +3320,7 @@ namespace Cpp {
       //
       {
         std::ostringstream buf;
+        buf.imbue(std::locale("C"));
         buf << "__cf";
         buf << '_' << gWrapperSerial++;
         wrapper_name = buf.str();
@@ -3697,6 +3705,7 @@ namespace Cpp {
       string wrapper_name;
       {
         ostringstream buf;
+        buf.imbue(std::locale("C"));
         buf << wrapper_prefix;
         //const NamedDecl* ND = dyn_cast<NamedDecl>(FD);
         //string mn;
@@ -4390,7 +4399,7 @@ namespace Cpp {
 
   void InstantiateTemplate(TCppScope_t spec) {
     Decl *S = static_cast<Decl*>(spec);
-    getSema().InstantiateClassTemplateSpecialization(SourceLocation(), llvm::cast<clang::ClassTemplateSpecializationDecl>(S), TemplateSpecializationKind::TSK_ExplicitInstantiationDefinition);
+    getSema().InstantiateClassTemplateSpecialization(SourceLocation(), llvm::cast<clang::ClassTemplateSpecializationDecl>(S), TemplateSpecializationKind::TSK_ExplicitInstantiationDefinition, false, false);
   }
 
   void GetClassTemplateInstantiationArgs(TCppScope_t templ_instance,
