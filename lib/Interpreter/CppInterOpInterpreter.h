@@ -99,7 +99,12 @@ inline void Named(clang::Sema* S, clang::LookupResult& R,
       // No definition, no lookup result.
       return;
     }
-    S->LookupQualifiedName(R, const_cast<clang::DeclContext*>(primaryWithin));
+    bool found = S->LookupQualifiedName(R, const_cast<clang::DeclContext*>(primaryWithin));
+    if (!found) {
+      if (const clang::CXXRecordDecl* RD = llvm::dyn_cast<clang::CXXRecordDecl>(Within)) {
+        S->LookupInSuper(R, const_cast<clang::CXXRecordDecl*>(RD));
+      }
+    }
   }
 }
 
