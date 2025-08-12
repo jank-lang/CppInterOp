@@ -795,7 +795,7 @@ namespace Cpp {
   InstantiateTemplate(TCppScope_t tmpl, const TemplateArgInfo* template_args,
                       size_t template_args_size);
 
-  CPPINTEROP_API void InstantiateTemplate(TCppScope_t spec);
+  CPPINTEROP_API bool InstantiateTemplate(TCppScope_t spec);
 
   /// Sets the class template instantiation arguments of \c templ_instance.
   ///

@@ -4397,9 +4397,9 @@ namespace Cpp {
                                template_args_size);
   }
 
-  void InstantiateTemplate(TCppScope_t spec) {
+  bool InstantiateTemplate(TCppScope_t spec) {
     Decl *S = static_cast<Decl*>(spec);
-    getSema().InstantiateClassTemplateSpecialization(SourceLocation(), llvm::cast<clang::ClassTemplateSpecializationDecl>(S), TemplateSpecializationKind::TSK_ExplicitInstantiationDefinition, false, false);
+    return getSema().InstantiateClassTemplateSpecialization(SourceLocation(), llvm::cast<clang::ClassTemplateSpecializationDecl>(S), TemplateSpecializationKind::TSK_ExplicitInstantiationDefinition, false, false);
   }
 
   void GetClassTemplateInstantiationArgs(TCppScope_t templ_instance,
