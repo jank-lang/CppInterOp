@@ -540,6 +540,8 @@ namespace Cpp {
 
   size_t GetSizeOfType(TCppType_t type) {
     QualType QT = QualType::getFromOpaquePtr(type);
+    if (const EnumType *ET = QT->getAs<EnumType>())
+      QT = ET->getDecl()->getIntegerType();
     if (const TagType *TT = QT->getAs<TagType>())
       return SizeOf(TT->getDecl());
 
@@ -551,6 +553,8 @@ namespace Cpp {
 
   size_t GetAlignmentOfType(TCppType_t type) {
     QualType QT = QualType::getFromOpaquePtr(type);
+    if (const EnumType *ET = QT->getAs<EnumType>())
+      QT = ET->getDecl()->getIntegerType();
     if (const TagType *TT = QT->getAs<TagType>())
       return AlignmentOf(TT->getDecl());
 
@@ -3020,6 +3024,65 @@ namespace Cpp {
       return 1;
     }
 
+    int get_wrapper_code(compat::Interpreter& I, const EnumConstantDecl* ECD,
+                         std::string& wrapper_name, std::string& wrapper) {
+      assert(ECD && "generate_wrapper called without a decl!");
+      ASTContext& Context = ECD->getASTContext();
+      PrintingPolicy Policy(Context.getPrintingPolicy());
+      //
+      //  Make the wrapper name.
+      //
+      {
+        std::ostringstream buf;
+        buf.imbue(std::locale("C"));
+        buf << "__cf";
+        // const NamedDecl* ND = dyn_cast<NamedDecl>(FD);
+        // std::string mn;
+        // fInterp->maybeMangleDeclName(ND, mn);
+        // buf << '_' << mn;
+        buf << '_' << gWrapperSerial++;
+        wrapper_name = buf.str();
+        LLVM_DEBUG(dbgs() << "Wrapper name (enum constant decl): " << wrapper_name << "\n");
+      }
+      //
+      //  Write the wrapper code.
+      // FIXME: this should be synthesized into the AST!
+      //
+      int indent_level = 0;
+      std::ostringstream buf;
+      buf << "__attribute__((used)) "
+             "__attribute__((annotate(\"__cling__ptrcheck(off)\")))\n"
+             "extern \"C\" "
+             "[[gnu::always_inline]]\n"
+             "inline void ";
+      buf << wrapper_name;
+      buf << "(void*, int, void**, [[gnu::nonnull]] void* ret)\n"
+             "{\n";
+      ++indent_level;
+      indent(buf, indent_level);
+
+      // Make a code string that follows this pattern:
+      //
+      // new (ret) (EnumType)(EnumScope::constant);
+      //
+      buf << "new (ret) ";
+      {
+        ASTContext& C = ECD->getASTContext();
+        QualType Ty = ECD->getType();
+        QualType QT = Ty.getCanonicalType();
+        std::string type;
+        get_type_as_string(QT, type, C, C.getPrintingPolicy());
+        buf << "(" << type << ")(";
+      }
+      buf << ECD->getQualifiedNameAsString();
+      buf << ");\n";
+
+      --indent_level;
+      buf << "}\n";
+      wrapper = buf.str();
+      return 1;
+    }
+
     int get_builtin_ctor_wrapper_code(compat::Interpreter& I, const QualType& CT,
                                       const QualType& AT, std::string& wrapper_name,
                                       std::string& wrapper) {
@@ -3539,6 +3602,43 @@ namespace Cpp {
     }
 
     template <WrapperKind K>
+    auto make_wrapper(compat::Interpreter& I,
+                      const EnumConstantDecl* ECD) {
+      using Ret = std::conditional_t<K == WrapperKind::Jit, JitCall::GenericCall, AotCall*>;
+      static std::map<const EnumConstantDecl*, Ret> gWrapperStore;
+
+      auto R = gWrapperStore.find(ECD);
+      if (R != gWrapperStore.end())
+        return R->second;
+
+      std::string wrapper_name;
+      std::string wrapper_code;
+
+      if (get_wrapper_code(I, ECD, wrapper_name, wrapper_code) == 0)
+        return (Ret)nullptr;
+
+      //
+      //   Compile the wrapper code.
+      //
+      bool withAccessControl = true;
+      void *wrapper = compile_wrapper<K>(I, wrapper_name, wrapper_code,
+                                         withAccessControl);
+      if (wrapper) {
+        gWrapperStore.insert(std::make_pair(ECD, (Ret)wrapper));
+      } else {
+        llvm::errs() << "TClingCallFunc::make_wrapper"
+                     << ":"
+                     << "Failed to compile\n"
+                     << "==== SOURCE BEGIN ====\n"
+                     << wrapper_code << "\n"
+                     << "==== SOURCE END ====\n";
+      }
+      LLVM_DEBUG(dbgs() << "Compiled '" << (wrapper ? "" : "un")
+                 << "successfully:\n" << wrapper_code << "'\n");
+      return (Ret)wrapper;
+    }
+
+    template <WrapperKind K>
     auto make_builtin_ctor_wrapper(compat::Interpreter& I, const QualType& CT, const QualType& AT) {
       using Ret = std::conditional_t<K == WrapperKind::Jit, JitCall::GenericCall, AotCall*>;
       static std::map<std::pair<QualType, QualType>, Ret> gWrapperStore;
@@ -3889,6 +3989,14 @@ namespace Cpp {
 
       if (const auto* V = dyn_cast<VarDecl>(D)) {
         if (auto Wrapper = make_wrapper<WrapperKind::Aot>(*interp, V)) {
+          return *Wrapper;
+        }
+        // FIXME: else error we failed to compile the wrapper.
+        return {};
+      }
+
+      if (const auto* E = dyn_cast<EnumConstantDecl>(D)) {
+        if (auto Wrapper = make_wrapper<WrapperKind::Aot>(*interp, E)) {
           return *Wrapper;
         }
         // FIXME: else error we failed to compile the wrapper.
