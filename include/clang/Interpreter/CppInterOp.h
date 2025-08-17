@@ -456,7 +456,19 @@ namespace Cpp {
 
   ///\returns a stringified version of a given function signature in the form:
   /// void N::f(int i, double d, long l = 0, char ch = 'a').
-  CPPINTEROP_API std::string GetFunctionSignature(TCppFunction_t func);
+  CPPINTEROP_API std::string GetFunctionSignature(TCppType_t func);
+
+  /// Gets the return type of the provided function.
+  CPPINTEROP_API TCppType_t GetFunctionReturnTypeFromType(TCppType_t func);
+
+  /// Gets the number of Arguments for the provided function.
+  CPPINTEROP_API TCppIndex_t GetFunctionNumArgsFromType(TCppType_t func);
+
+  /// For each Argument of a function, you can get the Argument Type
+  /// by providing the Argument Index, based on the number of arguments
+  /// from the GetFunctionNumArgs() function.
+  CPPINTEROP_API TCppType_t GetFunctionArgTypeFromType(TCppType_t func, TCppIndex_t iarg);
+
 
   ///\returns if a function was marked as \c =delete.
   CPPINTEROP_API bool IsFunctionDeleted(TCppConstFunction_t function);

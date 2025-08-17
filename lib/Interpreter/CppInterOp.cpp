@@ -1092,6 +1092,64 @@ namespace Cpp {
     return Signature;
   }
 
+  TCppType_t GetFunctionReturnTypeFromType(TCppType_t func) {
+    QualType TY = QualType::getFromOpaquePtr(func);
+
+    const clang::FunctionType* FT = nullptr;
+
+    if (const auto* F = TY->getAs<clang::FunctionType>()) {
+      FT = F;
+    } else if (const auto* PT = TY->getAs<clang::PointerType>()) {
+      FT = PT->getPointeeType()->getAs<clang::FunctionType>();
+    }
+
+    if (FT) {
+      return FT->getReturnType().getAsOpaquePtr();
+    }
+
+    return nullptr;
+  }
+
+  TCppIndex_t GetFunctionNumArgsFromType(TCppType_t func) {
+    QualType TY = QualType::getFromOpaquePtr(func);
+
+    const clang::FunctionType* FT = nullptr;
+
+    if (const auto* F = TY->getAs<clang::FunctionType>()) {
+      FT = F;
+    } else if (const auto* PT = TY->getAs<clang::PointerType>()) {
+      if (const auto* F = PT->getPointeeType()->getAs<clang::FunctionType>()) {
+        FT = F;
+      }
+    }
+
+    if (const auto* FPT = llvm::dyn_cast_or_null<clang::FunctionProtoType>(FT)) {
+      return FPT->getNumParams();
+    }
+
+    return 0;
+  }
+
+  TCppType_t GetFunctionArgTypeFromType(TCppType_t func, TCppIndex_t iarg) {
+    QualType TY = QualType::getFromOpaquePtr(func);
+
+    const clang::FunctionType* FT = nullptr;
+
+    if (const auto* F = TY->getAs<clang::FunctionType>()) {
+      FT = F;
+    } else if (const auto* PT = TY->getAs<clang::PointerType>()) {
+      FT = PT->getPointeeType()->getAs<clang::FunctionType>();
+    }
+
+    if (const auto* FPT = llvm::dyn_cast_or_null<clang::FunctionProtoType>(FT)) {
+      if (iarg < FPT->getNumParams()) {
+        return FPT->getParamType(iarg).getAsOpaquePtr();
+      }
+    }
+
+    return nullptr;
+  }
+
   // Internal functions that are not needed outside the library are
   // encompassed in an anonymous namespace as follows.
   namespace {
