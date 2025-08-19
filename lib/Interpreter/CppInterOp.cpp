@@ -2039,6 +2039,13 @@ namespace Cpp {
 
     if (ValueDecl *VD = dyn_cast<ValueDecl>(D))
       return VD->getType().getAsOpaquePtr();
+    if (auto *FTD = dyn_cast<FunctionTemplateDecl>(D)) {
+      FunctionDecl *FD = FTD->getTemplatedDecl();
+      if (FD) {
+        return FD->getType().getAsOpaquePtr();
+      }
+      return 0;
+    }
 
     return C.getTypeDeclType(cast<TypeDecl>(D)).getAsOpaquePtr();
   }
