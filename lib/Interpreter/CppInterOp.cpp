@@ -2210,6 +2210,7 @@ namespace Cpp {
       PrintingPolicy Policy(C.getPrintingPolicy());
 #if CLANG_VERSION_MAJOR > 16
       Policy.SuppressElaboration = true;
+      Policy.FullyQualifiedName = true;
 #endif
       refType = kNotReference;
       if (QT->isRecordType() && forArgument) {
