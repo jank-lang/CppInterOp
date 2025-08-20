@@ -3161,7 +3161,7 @@ namespace Cpp {
       {
         const RecordDecl* RD = FD->getParent();
         buf << "(&((";
-        buf << RD->getQualifiedNameAsString();
+        buf << class_name;
         buf << "*)obj)->";
       }
       buf << FD->getName().str();
