@@ -4902,7 +4902,17 @@ namespace Cpp {
 
   bool InstantiateTemplate(TCppScope_t spec) {
     clang::Sema &S = getSema();
-    clang::QualType QT = S.Context.getTypeDeclType(llvm::cast<ClassTemplateSpecializationDecl>((Decl*)spec));
+    clang::QualType QT;
+    if(auto *D = llvm::dyn_cast<ClassTemplateSpecializationDecl>((Decl*)spec))
+      QT = S.Context.getTypeDeclType(D);
+    if(auto *D = llvm::dyn_cast<FunctionTemplateDecl>((Decl*)spec))
+      QT = D->getTemplatedDecl()->getType();
+    if(auto *D = llvm::dyn_cast<FunctionDecl>((Decl*)spec))
+      QT = D->getType();
+    if (auto *D = llvm::dyn_cast<CXXConstructorDecl>((Decl*)spec))
+      QT = S.Context.getTypeDeclType(D->getParent());
+    if(QT.isNull())
+      return true;
 
     // Triggers instantiation if this is an implicit instantiation.
     // Returns true on error; false on success.
