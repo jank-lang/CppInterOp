@@ -1568,22 +1568,103 @@ namespace Cpp {
     return 0;
   }
 
-  std::vector<TCppFunction_t> LookupMethods(const std::string& name,
-                                            TCppScope_t parent) {
-    auto *D = (clang::Decl *)parent;
+  std::vector<TCppFunction_t> LookupMethods(const std::string& name, TCppScope_t parent) {
+    using namespace clang;
+
     std::vector<TCppFunction_t> results;
+    Decl* D = static_cast<Decl*>(parent);
+    if (!D) return results;
 
-    if (auto *DC = llvm::dyn_cast<clang::DeclContext>(D)) {
-      auto &Ctx = getASTContext();
-      clang::IdentifierInfo &II = Ctx.Idents.get(name);
-      clang::DeclarationName DN(&II);
+    auto& Ctx = getASTContext();
+    Sema& S = getSema(); // however you access your Sema
 
-      for (auto *ND : DC->lookup(DN)) {
-        if (auto *MD = llvm::dyn_cast<clang::CXXMethodDecl>(ND)) {
-          results.push_back(MD);
-        } else if (auto *TD = llvm::dyn_cast<clang::FunctionTemplateDecl>(ND)) {
-          results.push_back(TD);
+    // Resolve to a CXXRecordDecl *definition* to do member lookup on.
+    auto resolveRecordDef = [&](Decl* Any) -> CXXRecordDecl* {
+      // If we were handed a record directly.
+      if (auto* RD = dyn_cast<CXXRecordDecl>(Any)) {
+        if (auto* Def = RD->getDefinition()) return Def;
+        return RD;
+      }
+
+      // If we were handed a class template specialization.
+      if (auto* Spec = dyn_cast<ClassTemplateSpecializationDecl>(Any)) {
+        if (auto* CTD = Spec->getSpecializedTemplate()) {
+          if (auto* Templated = CTD->getTemplatedDecl()) {
+            if (auto* Def = Templated->getDefinition()) return Def;
+            return Templated;
+          }
         }
+        // Fall back to the specialization’s own definition if any.
+        if (auto* Def = Spec->getDefinition()) return Def;
+        return Spec;
+      }
+
+      // If we were handed a typedef / type alias to a class template or record.
+      if (auto* TDN = dyn_cast<TypedefNameDecl>(Any)) {
+        if (auto* RD = TDN->getUnderlyingType()->getAsCXXRecordDecl()) {
+          if (auto* Def = RD->getDefinition()) return Def;
+          return RD;
+        }
+      }
+
+      // If we were handed *something* that is a DeclContext, try its type.
+      if (auto* DC = dyn_cast<DeclContext>(Any)) {
+        if (auto* RD = dyn_cast<CXXRecordDecl>(DC)) {
+          if (auto* Def = RD->getDefinition()) return Def;
+          return RD;
+        }
+      }
+
+      return nullptr;
+    };
+
+    CXXRecordDecl* RD = resolveRecordDef(D);
+    if (!RD) return results;
+
+    // Ensure the class type is complete enough for lookup to visit bases, etc.
+    // (Location can be empty; we just want to trigger completion if needed.)
+    (void)S.RequireCompleteType(SourceLocation(),
+        Ctx.getRecordType(RD),
+        diag::err_typecheck_incomplete_tag);
+
+    // Build the lookup name.
+    IdentifierInfo& II = Ctx.Idents.get(name);
+    LookupResult R(S, &II, SourceLocation(), Sema::LookupMemberName);
+
+    // Perform qualified member lookup (this walks bases, applies using-decls).
+    // Important: do NOT call DeclContext::lookup here; that’s a flat map of
+    // *direct* members only.
+    bool FoundAny = S.LookupQualifiedName(R, RD);
+
+    if (!FoundAny) {
+      // As a fallback, try on the primary template’s pattern if RD is a spec.
+      if (auto* Spec = dyn_cast<ClassTemplateSpecializationDecl>(RD)) {
+        if (auto* CTD = Spec->getSpecializedTemplate()) {
+          if (auto* Templated = CTD->getTemplatedDecl()) {
+            (void)S.RequireCompleteType(SourceLocation(),
+                Ctx.getRecordType(Templated),
+                diag::err_typecheck_incomplete_tag);
+            LookupResult R2(S, &II, SourceLocation(), Sema::LookupMemberName);
+            S.LookupQualifiedName(R2, Templated);
+            for (NamedDecl* ND : R2) {
+              if (auto* USD = dyn_cast<UsingShadowDecl>(ND)) ND = USD->getTargetDecl();
+              if (auto* MD = dyn_cast<CXXMethodDecl>(ND)) results.push_back(MD);
+              else if (auto* FTD = dyn_cast<FunctionTemplateDecl>(ND)) results.push_back(FTD);
+            }
+            return results;
+          }
+        }
+      }
+      return results;
+    }
+
+    // Collect results, unwrapping using-shadow decls.
+    for (NamedDecl* ND : R) {
+      if (auto* USD = dyn_cast<UsingShadowDecl>(ND)) ND = USD->getTargetDecl();
+      if (auto* MD = dyn_cast<CXXMethodDecl>(ND)) {
+        results.push_back(MD);
+      } else if (auto* FTD = dyn_cast<FunctionTemplateDecl>(ND)) {
+        results.push_back(FTD);
       }
     }
 
