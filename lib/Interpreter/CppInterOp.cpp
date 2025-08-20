@@ -2115,18 +2115,21 @@ namespace Cpp {
     if (!klass)
       return 0;
 
-    auto *D = (Decl *) klass;
-    ASTContext &C = getASTContext();
+    auto* D = (Decl*)klass;
+    ASTContext& C = getASTContext();
 
-    if (ValueDecl *VD = dyn_cast<ValueDecl>(D))
-      return VD->getType().getAsOpaquePtr();
-    if (auto *FTD = dyn_cast<FunctionTemplateDecl>(D)) {
-      FunctionDecl *FD = FTD->getTemplatedDecl();
+    if (auto* FTD = dyn_cast<FunctionTemplateDecl>(D)) {
+      FunctionDecl* FD = FTD->getTemplatedDecl();
       if (FD) {
-        return FD->getType().getAsOpaquePtr();
+        return C.getPointerType(FD->getType()).getAsOpaquePtr();
       }
       return 0;
     }
+    if (auto* FD = dyn_cast<FunctionDecl>(D)) {
+      return C.getPointerType(FD->getType()).getAsOpaquePtr();
+    }
+    if (ValueDecl* VD = dyn_cast<ValueDecl>(D))
+      return VD->getType().getAsOpaquePtr();
 
     return C.getTypeDeclType(cast<TypeDecl>(D)).getAsOpaquePtr();
   }
