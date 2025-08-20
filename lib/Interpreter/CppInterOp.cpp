@@ -4900,8 +4900,12 @@ namespace Cpp {
   }
 
   bool InstantiateTemplate(TCppScope_t spec) {
-    Decl *S = static_cast<Decl*>(spec);
-    return getSema().InstantiateClassTemplateSpecialization(SourceLocation(), llvm::cast<clang::ClassTemplateSpecializationDecl>(S), TemplateSpecializationKind::TSK_ExplicitInstantiationDefinition, false, false);
+    clang::Sema &S = getSema();
+    clang::QualType QT = S.Context.getTypeDeclType(llvm::cast<ClassTemplateSpecializationDecl>((Decl*)spec));
+
+    // Triggers instantiation if this is an implicit instantiation.
+    // Returns true on error; false on success.
+    return S.RequireCompleteType(clang::SourceLocation(), QT, /*DiagID*/ 0 /*no diagnostic*/);
   }
 
   void GetClassTemplateInstantiationArgs(TCppScope_t templ_instance,
