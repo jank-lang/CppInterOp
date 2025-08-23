@@ -4912,23 +4912,74 @@ namespace Cpp {
                                template_args_size);
   }
 
+  bool InstantiateFunction(clang::FunctionDecl *FD) {
+    // Ignore if not a template instantiation
+    if (!(FD->isTemplateInstantiation() && !FD->isDefined()))
+      return true;
+
+    clang::Sema &S = getSema();
+    clang::DiagnosticErrorTrap Trap(S.getDiagnostics());
+
+    S.InstantiateFunctionDefinition(FD->getLocation(), FD,
+        /*Recursive=*/true,
+        /*DefinitionRequired=*/true);
+
+    return Trap.hasErrorOccurred();
+  }
+
+  bool InstantiateClass(clang::ClassTemplateSpecializationDecl *Spec) {
+    if (!Spec)
+      return true;
+
+    clang::Sema &S = getSema();
+    clang::DiagnosticErrorTrap Trap(S.getDiagnostics());
+
+    // Force instantiation of the class definition itself
+    if (!Spec->isCompleteDefinition()) {
+      if (S.InstantiateClassTemplateSpecialization(Spec->getLocation(), Spec,
+            clang::TSK_ImplicitInstantiation,
+            /*Complain=*/true,
+            true)) {
+        return true; // failed
+      }
+    }
+
+    // Force instantiation of members (functions, nested types, etc.)
+    S.InstantiateClassTemplateSpecializationMembers(Spec->getLocation(), Spec,
+        /*TSK=*/clang::TSK_ImplicitInstantiation);
+
+    return Trap.hasErrorOccurred();
+  }
+
   bool InstantiateTemplate(TCppScope_t spec) {
     clang::Sema &S = getSema();
     clang::QualType QT;
     if(auto *D = llvm::dyn_cast<ClassTemplateSpecializationDecl>((Decl*)spec))
       QT = S.Context.getTypeDeclType(D);
-    if(auto *D = llvm::dyn_cast<FunctionTemplateDecl>((Decl*)spec))
+    else if(auto *D = llvm::dyn_cast<FunctionTemplateDecl>((Decl*)spec))
       QT = D->getTemplatedDecl()->getType();
-    if(auto *D = llvm::dyn_cast<FunctionDecl>((Decl*)spec))
-      QT = D->getType();
-    if (auto *D = llvm::dyn_cast<CXXConstructorDecl>((Decl*)spec))
+    else if (auto *D = llvm::dyn_cast<CXXConstructorDecl>((Decl*)spec))
       QT = S.Context.getTypeDeclType(D->getParent());
+    else if(auto *D = llvm::dyn_cast<FunctionDecl>((Decl*)spec))
+      QT = D->getType();
+
     if(QT.isNull())
       return true;
 
     // Triggers instantiation if this is an implicit instantiation.
     // Returns true on error; false on success.
-    return S.RequireCompleteType(clang::SourceLocation(), QT, /*DiagID*/ 0 /*no diagnostic*/);
+    bool R = S.RequireCompleteType(clang::SourceLocation(), QT, /*DiagID*/ 0 /*no diagnostic*/);
+
+    if(!R) {
+      if (auto *FD = llvm::dyn_cast<FunctionDecl>((Decl*)spec)) {
+        return InstantiateFunction(FD);
+      }
+      if (auto *CD = llvm::dyn_cast<ClassTemplateSpecializationDecl>((Decl*)spec)) {
+        return InstantiateClass(CD);
+      }
+    }
+
+    return R;
   }
 
   void GetClassTemplateInstantiationArgs(TCppScope_t templ_instance,
