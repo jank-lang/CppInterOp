@@ -223,6 +223,11 @@ namespace Cpp {
     return isa<CXXRecordDecl>(D);
   }
 
+  bool IsClassTemplate(TCppScope_t scope) {
+    Decl *D = static_cast<Decl*>(scope);
+    return isa<ClassTemplateDecl>(D);
+  }
+
   bool IsFunction(TCppScope_t scope) {
     Decl* D = static_cast<Decl*>(scope);
     return isa<FunctionDecl>(D);
