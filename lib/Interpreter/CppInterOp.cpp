@@ -4921,33 +4921,7 @@ namespace Cpp {
     clang::Sema &S = getSema();
     clang::DiagnosticErrorTrap Trap(S.getDiagnostics());
 
-    S.InstantiateFunctionDefinition(FD->getLocation(), FD,
-        /*Recursive=*/true,
-        /*DefinitionRequired=*/true);
-
-    return Trap.hasErrorOccurred();
-  }
-
-  bool InstantiateClass(clang::ClassTemplateSpecializationDecl *Spec) {
-    if (!Spec)
-      return true;
-
-    clang::Sema &S = getSema();
-    clang::DiagnosticErrorTrap Trap(S.getDiagnostics());
-
-    // Force instantiation of the class definition itself
-    if (!Spec->isCompleteDefinition()) {
-      if (S.InstantiateClassTemplateSpecialization(Spec->getLocation(), Spec,
-            clang::TSK_ImplicitInstantiation,
-            /*Complain=*/true,
-            true)) {
-        return true; // failed
-      }
-    }
-
-    // Force instantiation of members (functions, nested types, etc.)
-    S.InstantiateClassTemplateSpecializationMembers(Spec->getLocation(), Spec,
-        /*TSK=*/clang::TSK_ImplicitInstantiation);
+    S.InstantiateFunctionDefinition(FD->getLocation(), FD, /*Recursive=*/true, /*DefinitionRequired=*/true);
 
     return Trap.hasErrorOccurred();
   }
@@ -4967,20 +4941,16 @@ namespace Cpp {
     if(QT.isNull())
       return true;
 
-    // Triggers instantiation if this is an implicit instantiation.
-    // Returns true on error; false on success.
+    clang::DiagnosticErrorTrap Trap(S.getDiagnostics());
     bool R = S.RequireCompleteType(clang::SourceLocation(), QT, /*DiagID*/ 0 /*no diagnostic*/);
 
     if(!R) {
       if (auto *FD = llvm::dyn_cast<FunctionDecl>((Decl*)spec)) {
         return InstantiateFunction(FD);
       }
-      if (auto *CD = llvm::dyn_cast<ClassTemplateSpecializationDecl>((Decl*)spec)) {
-        return InstantiateClass(CD);
-      }
     }
 
-    return R;
+    return R || Trap.hasErrorOccurred();
   }
 
   void GetClassTemplateInstantiationArgs(TCppScope_t templ_instance,
@@ -5231,7 +5201,7 @@ namespace Cpp {
     ArgExprs.reserve(arg_types.size());
     for (auto const &arg_type : arg_types) {
       QualType T = QualType::getFromOpaquePtr(arg_type.m_Type);
-      T = Ctx.getCanonicalType(T).getUnqualifiedType();
+      T = Ctx.getCanonicalType(T).getUnqualifiedType().getNonReferenceType();
       ArgExprs.push_back(new (Ctx) OpaqueValueExpr(SourceLocation(), T, VK_LValue));
     }
 
