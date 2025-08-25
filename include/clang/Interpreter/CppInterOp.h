@@ -691,7 +691,8 @@ namespace Cpp {
   CPPINTEROP_API OperatorArity GetOperatorArity(TCppFunction_t op);
 
   ///\returns list of operator overloads
-  CPPINTEROP_API void GetOperator(TCppScope_t scope, Operator op,
+  CPPINTEROP_API void GetOperator(Operator op,
+                                  std::vector<TemplateArgInfo> const &arg_types,
                                   std::vector<TCppFunction_t>& operators,
                                   OperatorArity kind = kBoth);
 

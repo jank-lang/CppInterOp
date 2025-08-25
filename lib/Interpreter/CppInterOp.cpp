@@ -26,6 +26,7 @@
 #include "clang/AST/RecordLayout.h"
 #include "clang/AST/Stmt.h"
 #include "clang/AST/Type.h"
+#include "clang/AST/DeclFriend.h"
 #include "clang/Basic/DiagnosticSema.h"
 #include "clang/Basic/Linkage.h"
 #include "clang/Basic/OperatorKinds.h"
@@ -5196,18 +5197,87 @@ namespace Cpp {
     return (OperatorArity)~0U;
   }
 
-  void GetOperator(TCppScope_t scope, Operator op,
-                   std::vector<TCppFunction_t>& operators, OperatorArity kind) {
-    Decl* D = static_cast<Decl*>(scope);
-    if (auto* DC = llvm::dyn_cast_or_null<DeclContext>(D)) {
-      ASTContext& C = getSema().getASTContext();
-      DeclContextLookupResult Result =
-          DC->lookup(C.DeclarationNames.getCXXOperatorName(
-              (clang::OverloadedOperatorKind)op));
+  void GetOperator(Operator op, std::vector<TemplateArgInfo> const &arg_types,
+                   std::vector<TCppFunction_t> &operators, OperatorArity kind) {
+    Sema &S = getSema();
+    ASTContext &Ctx = S.Context;
 
-      for (auto* i : Result) {
-        if (kind & GetOperatorArity(i))
-          operators.push_back(i);
+    const auto Op = static_cast<OverloadedOperatorKind>(op);
+    DeclarationName OpName = Ctx.DeclarationNames.getCXXOperatorName(Op);
+
+    llvm::SmallPtrSet<const NamedDecl*, 32> Seen;
+
+    auto pushIfNew = [&](NamedDecl *ND) {
+      if (!ND)
+        return;
+      if (Seen.insert(ND).second) {
+        if (kind & GetOperatorArity(ND))
+          operators.push_back(ND);
+      }
+    };
+
+    // --- 0) Plain scope lookup (parser-time operator table).
+    UnresolvedSet<16> Fns;
+    S.LookupOverloadedOperatorName(Op, S.getCurScope(), Fns);
+    for (auto I = Fns.begin(); I != Fns.end(); ++I) {
+      if (auto *FTD = dyn_cast<FunctionTemplateDecl>(I.getPair().getDecl()))
+        pushIfNew(FTD);
+      else
+        pushIfNew(I.getPair().getDecl()->getUnderlyingDecl());
+    }
+
+    // --- 1) Build operand exprs (types must be exactly your operands).
+    llvm::SmallVector<Expr*, 2> ArgExprs;
+    ArgExprs.reserve(arg_types.size());
+    for (auto const &arg_type : arg_types) {
+      QualType T = QualType::getFromOpaquePtr(arg_type.m_Type);
+      T = Ctx.getCanonicalType(T).getUnqualifiedType();
+      ArgExprs.push_back(new (Ctx) OpaqueValueExpr(SourceLocation(), T, VK_LValue));
+    }
+
+    // --- 2) Collect associated namespaces/classes for ADL.
+    Sema::AssociatedNamespaceSet ANS;
+    Sema::AssociatedClassSet     ACS;
+    S.FindAssociatedClassesAndNamespaces(SourceLocation(), ArgExprs, ANS, ACS);
+
+    // --- 3) Search each associated namespace (PRIMARY context, via Sema).
+    for (auto *NS : ANS) {
+      DeclContext *PC = NS->getPrimaryContext();
+      LookupResult LR(S, OpName, SourceLocation(), Sema::LookupOperatorName);
+      S.LookupQualifiedName(LR, PC);
+      for (NamedDecl *ND : LR) {
+        if (auto *FTD = dyn_cast<FunctionTemplateDecl>(ND))
+          pushIfNew(FTD);
+        else if (auto *FD = dyn_cast<FunctionDecl>(ND))
+          pushIfNew(FD);
+      }
+    }
+
+    // --- 4) Search each associated class:
+    //       a) member operators (rare for != here)
+    //       b) hidden friends declared inside the class (ADL-only)
+    for (CXXRecordDecl *RD : ACS) {
+      DeclContext *PC = RD->getPrimaryContext();
+
+      // a) any member operator!= (unlikely for __normal_iterator, but cheap)
+      for (NamedDecl *ND : PC->lookup(OpName)) {
+        if (auto *FTD = dyn_cast<FunctionTemplateDecl>(ND))
+          pushIfNew(FTD);
+        else if (auto *FD = dyn_cast<FunctionDecl>(ND))
+          pushIfNew(FD);
+      }
+
+      // b) hidden friends: these are NOT found by ordinary lookup
+      for (auto *F : RD->friends()) {
+        if (auto *FriendND = dyn_cast_or_null<NamedDecl>(F->getFriendDecl())) {
+          auto name = FriendND->getDeclName();
+          if (name.getCXXOverloadedOperator() == Op) {
+            if (auto *FTD = dyn_cast<FunctionTemplateDecl>(FriendND))
+              pushIfNew(FTD);
+            else if (auto *FD = dyn_cast<FunctionDecl>(FriendND))
+              pushIfNew(FD);
+          }
+        }
       }
     }
   }
