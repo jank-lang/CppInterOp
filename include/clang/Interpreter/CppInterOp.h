@@ -668,7 +668,7 @@ namespace Cpp {
 
   CPPINTEROP_API AotCall MakeBuiltinConstructorAotCallable(TCppType_t type, TCppType_t arg_type);
 
-  CPPINTEROP_API AotCall MakeFunctionValueAotCallable(TCppScope_t scope);
+  CPPINTEROP_API AotCall MakeFunctionValueAotCallable(TCppScope_t scope, TCppType_t type);
 
   CPPINTEROP_API AotCall MakeAggregateInitializationAotCallable(TCppType_t type, const std::vector<TemplateArgInfo>& arg_types);
 
@@ -691,10 +691,8 @@ namespace Cpp {
   CPPINTEROP_API OperatorArity GetOperatorArity(TCppFunction_t op);
 
   ///\returns list of operator overloads
-  CPPINTEROP_API void GetOperator(Operator op,
-                                  std::vector<TemplateArgInfo> const &arg_types,
-                                  std::vector<TCppFunction_t>& operators,
-                                  OperatorArity kind = kBoth);
+  CPPINTEROP_API void GetOperator(TCppScope_t scope, Operator op,
+                   std::vector<TCppFunction_t>& operators, OperatorArity kind);
 
   /// Creates an instance of the interpreter we need for the various interop
   /// services.
@@ -846,7 +844,8 @@ namespace Cpp {
 
   CPPINTEROP_API TCppScope_t
   BestMemberOverloadFunctionMatch(const std::vector<TCppScope_t>& candidates,
-                                  const std::vector<TemplateArgInfo>& arg_types);
+                                  const std::vector<TemplateArgInfo>& arg_types,
+                                  const std::vector<TCppScope_t>& arg_scopes);
 
   CPPINTEROP_API void GetAllCppNames(TCppScope_t scope,
                                      std::set<std::string>& names);
