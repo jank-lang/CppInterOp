@@ -1636,6 +1636,7 @@ namespace Cpp {
     // Build the lookup name.
     IdentifierInfo& II = Ctx.Idents.get(name);
     LookupResult R(S, &II, SourceLocation(), Sema::LookupMemberName);
+    R.suppressAccessDiagnostics();
 
     // Perform qualified member lookup (this walks bases, applies using-decls).
     // Important: do NOT call DeclContext::lookup here; that’s a flat map of
