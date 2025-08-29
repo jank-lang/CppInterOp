@@ -2411,8 +2411,8 @@ namespace Cpp {
     }
 
     void make_narg_call(const FunctionDecl* FD, const std::string& return_type,
-                        const unsigned N, std::ostringstream& typedefbuf,
-                        std::ostringstream& callbuf,
+                        const unsigned N, const std::vector<TCppType_t> &arg_types,
+                        std::ostringstream& typedefbuf, std::ostringstream& callbuf,
                         const std::string& class_name, int indent_level) {
       //
       // Make a code string that follows this pattern:
@@ -2505,9 +2505,13 @@ namespace Cpp {
         callbuf << ")";
 
       callbuf << "(";
-      for (unsigned i = 0U; i < N; ++i) {
-        const ParmVarDecl* PVD = FD->getParamDecl(i);
-        QualType Ty = PVD->getType();
+      for (unsigned i = 0U; i < std::max<unsigned>(N, arg_types.size()); ++i) {
+        QualType Ty;
+        if(i < N) {
+          Ty = FD->getParamDecl(i)->getType();
+        } else {
+          Ty = QualType::getFromOpaquePtr(arg_types[i]);
+        }
         QualType QT = Ty.getCanonicalType();
         std::string type_name;
         EReferenceType refType = kNotReference;
@@ -2568,6 +2572,7 @@ namespace Cpp {
 
     void make_narg_call_with_return(compat::Interpreter& I,
                                     const FunctionDecl* FD, const unsigned N,
+                                    const std::vector<TCppType_t> &arg_types,
                                     const std::string& class_name,
                                     std::ostringstream& buf, int indent_level) {
       // Make a code string that follows this pattern:
@@ -2602,7 +2607,7 @@ namespace Cpp {
         std::ostringstream typedefbuf;
         std::ostringstream callbuf;
         indent(callbuf, indent_level);
-        make_narg_call(FD, "void", N, typedefbuf, callbuf, class_name,
+        make_narg_call(FD, "void", N, arg_types, typedefbuf, callbuf, class_name,
                        indent_level);
         callbuf << ";\n";
         indent(callbuf, indent_level);
@@ -2643,8 +2648,7 @@ namespace Cpp {
         //
         //  Write the actual function call.
         //
-        make_narg_call(FD, type_name, N, typedefbuf, callbuf, class_name,
-            indent_level);
+        make_narg_call(FD, type_name, N, arg_types, typedefbuf, callbuf, class_name, indent_level);
         //
         //  End the placement new.
         //
@@ -2658,6 +2662,7 @@ namespace Cpp {
     }
 
     int get_wrapper_code(compat::Interpreter& I, const FunctionDecl* FD,
+                         const std::vector<TCppType_t> &arg_types,
                          std::string& wrapper_name, std::string& wrapper) {
       assert(FD && "generate_wrapper called without a function decl!");
       ASTContext& Context = FD->getASTContext();
@@ -3078,7 +3083,7 @@ namespace Cpp {
       ++indent_level;
       if (min_args == num_params) {
         // No parameters with defaults.
-        make_narg_call_with_return(I, FD, num_params, class_name, buf,
+        make_narg_call_with_return(I, FD, num_params, arg_types, class_name, buf,
                                    indent_level);
       } else {
         // We need one function call clause compiled for every
@@ -3087,7 +3092,7 @@ namespace Cpp {
           indent(buf, indent_level);
           buf << "if (nargs == " << N << ") {\n";
           ++indent_level;
-          make_narg_call_with_return(I, FD, N, class_name, buf, indent_level);
+          make_narg_call_with_return(I, FD, N, arg_types, class_name, buf, indent_level);
           --indent_level;
           indent(buf, indent_level);
           buf << "}\n";
@@ -3894,7 +3899,47 @@ namespace Cpp {
     template <WrapperKind K = WrapperKind::Jit>
     auto make_wrapper(compat::Interpreter& I,
                       const FunctionDecl* FD,
-                      bool functionValue) {
+                      const std::vector<TCppType_t> &arg_types) {
+      using Ret = std::conditional_t<K == WrapperKind::Jit, JitCall::GenericCall, AotCall*>;
+      using Key = std::pair<const FunctionDecl*, std::vector<TCppType_t>>;
+      static std::map<Key, Ret> gWrapperStore;
+
+      auto R = gWrapperStore.find({ FD, arg_types });
+      if (R != gWrapperStore.end())
+        return R->second;
+
+      std::string wrapper_name;
+      std::string wrapper_code;
+
+      if (get_wrapper_code(I, FD, arg_types, wrapper_name, wrapper_code) == 0)
+        return (Ret)nullptr;
+
+      //
+      //   Compile the wrapper code.
+      //
+      bool withAccessControl = true;
+      // We should be able to call private default constructors.
+      if (auto Ctor = dyn_cast<CXXConstructorDecl>(FD))
+        withAccessControl = !Ctor->isDefaultConstructor();
+      void *wrapper = compile_wrapper<K>(I, wrapper_name, wrapper_code,
+                                         withAccessControl);
+      if (wrapper) {
+        gWrapperStore.insert(std::make_pair(std::make_pair(FD, arg_types), (Ret)wrapper));
+      } else {
+        llvm::errs() << "TClingCallFunc::make_wrapper"
+                     << ":"
+                     << "Failed to compile\n"
+                     << "==== SOURCE BEGIN ====\n"
+                     << wrapper_code << "\n"
+                     << "==== SOURCE END ====\n";
+      }
+      LLVM_DEBUG(dbgs() << "Compiled '" << (wrapper ? "" : "un")
+                 << "successfully:\n" << wrapper_code << "'\n");
+      return (Ret)wrapper;
+    }
+
+    template <WrapperKind K = WrapperKind::Jit>
+    auto make_value_wrapper(compat::Interpreter& I, const FunctionDecl* FD) {
       using Ret = std::conditional_t<K == WrapperKind::Jit, JitCall::GenericCall, AotCall*>;
       static std::map<const FunctionDecl*, Ret> gWrapperStore;
 
@@ -3905,14 +3950,8 @@ namespace Cpp {
       std::string wrapper_name;
       std::string wrapper_code;
 
-      if(functionValue) {
-        if (get_value_wrapper_code(I, FD, wrapper_name, wrapper_code) == 0)
-          return (Ret)nullptr;
-      }
-      else {
-        if (get_wrapper_code(I, FD, wrapper_name, wrapper_code) == 0)
-          return (Ret)nullptr;
-      }
+      if (get_value_wrapper_code(I, FD, wrapper_name, wrapper_code) == 0)
+        return (Ret)nullptr;
 
       //
       //   Compile the wrapper code.
@@ -4390,7 +4429,7 @@ namespace Cpp {
         return {};
       }
 
-      if (auto Wrapper = make_wrapper(*interp, cast<FunctionDecl>(D), false)) {
+      if (auto Wrapper = make_wrapper(*interp, cast<FunctionDecl>(D), {})) {
         return {JitCall::kGenericCall, Wrapper, cast<FunctionDecl>(D)};
       }
       // FIXME: else error we failed to compile the wrapper.
@@ -4401,8 +4440,7 @@ namespace Cpp {
       return MakeFunctionCallable(&getInterp(), func);
     }
 
-    CPPINTEROP_API AotCall MakeAotCallable(TInterp_t I,
-                                           TCppScope_t scope) {
+    AotCall MakeAotCallable(TInterp_t I, TCppScope_t scope) {
       const auto* D = static_cast<const clang::Decl*>(scope);
       if (!D)
         return {};
@@ -4418,7 +4456,7 @@ namespace Cpp {
       }
 
       if (const auto* F = dyn_cast<FunctionDecl>(D)) {
-        if (auto Wrapper = make_wrapper<WrapperKind::Aot>(*interp, F, false)) {
+        if (auto Wrapper = make_wrapper<WrapperKind::Aot>(*interp, F, {})) {
           return *Wrapper;
         }
         // FIXME: else error we failed to compile the wrapper.
@@ -4455,6 +4493,22 @@ namespace Cpp {
 
     CPPINTEROP_API AotCall MakeAotCallable(TCppScope_t scope) {
       return MakeAotCallable(&getInterp(), scope);
+    }
+
+    CPPINTEROP_API AotCall MakeAotCallable(TCppScope_t scope, const std::vector<TCppType_t> &arg_types) {
+      const auto* D = static_cast<const clang::Decl*>(scope);
+      if (!D)
+        return {};
+
+      auto &interp = getInterp();;
+
+      if (const auto* F = dyn_cast<FunctionDecl>(D)) {
+        if (auto Wrapper = make_wrapper<WrapperKind::Aot>(interp, F, arg_types)) {
+          return *Wrapper;
+        }
+        // FIXME: else error we failed to compile the wrapper.
+        return {};
+      }
     }
 
     CPPINTEROP_API AotCall MakeBuiltinConstructorAotCallable(TCppType_t type) {
@@ -4503,7 +4557,7 @@ namespace Cpp {
           return {};
       }
       if (const auto* F = dyn_cast<FunctionDecl>(D)) {
-        if (auto Wrapper = make_wrapper<WrapperKind::Aot>(*interp, F, true)) {
+        if (auto Wrapper = make_value_wrapper<WrapperKind::Aot>(*interp, F)) {
           return *Wrapper;
         }
         // FIXME: else error we failed to compile the wrapper.

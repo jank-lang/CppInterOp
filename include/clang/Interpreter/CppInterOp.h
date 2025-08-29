@@ -661,8 +661,7 @@ namespace Cpp {
   /// uniform interface to get the name and IR module for it.
   CPPINTEROP_API AotCall MakeAotCallable(TCppScope_t scope);
 
-  CPPINTEROP_API AotCall MakeAotCallable(TInterp_t I,
-                                         TCppScope_t scope);
+  CPPINTEROP_API AotCall MakeAotCallable(TCppScope_t scope, const std::vector<TCppType_t> &arg_types);
 
   CPPINTEROP_API AotCall MakeBuiltinConstructorAotCallable(TCppType_t type);
 
