@@ -691,7 +691,8 @@ namespace Cpp {
   CPPINTEROP_API OperatorArity GetOperatorArity(TCppFunction_t op);
 
   ///\returns list of operator overloads
-  CPPINTEROP_API void GetOperator(TCppScope_t scope, Operator op,
+  CPPINTEROP_API void GetOperator(Operator op,
+                   std::vector<TemplateArgInfo> const &arg_types,
                    std::vector<TCppFunction_t>& operators, OperatorArity kind);
 
   /// Creates an instance of the interpreter we need for the various interop
@@ -842,10 +843,10 @@ namespace Cpp {
                             const std::vector<TemplateArgInfo>& explicit_types,
                             const std::vector<TemplateArgInfo>& arg_types);
 
-  CPPINTEROP_API TCppScope_t
-  BestMemberOverloadFunctionMatch(const std::vector<TCppScope_t>& candidates,
-                                  const std::vector<TemplateArgInfo>& arg_types,
-                                  const std::vector<TCppScope_t>& arg_scopes);
+  CPPINTEROP_API std::vector<TCppScope_t>
+  BestOverloadMatch(const std::vector<TCppScope_t>& candidates,
+                    const std::vector<TemplateArgInfo>& arg_types,
+                    const std::vector<TCppScope_t>& arg_scopes);
 
   CPPINTEROP_API void GetAllCppNames(TCppScope_t scope,
                                      std::set<std::string>& names);

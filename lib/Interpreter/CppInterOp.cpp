@@ -1354,96 +1354,112 @@ namespace Cpp {
     return Result;
   }
 
-  TCppScope_t BestMemberOverloadFunctionMatch(const std::vector<TCppScope_t>& candidates,
-                                              const std::vector<TemplateArgInfo>& arg_types,
-                                              const std::vector<TCppScope_t>& arg_scopes) {
-    if(arg_types.empty()) {
-      return nullptr;
-    }
-
+  std::vector<TCppScope_t> BestOverloadMatch(const std::vector<TCppScope_t>& candidates,
+                                             const std::vector<TemplateArgInfo>& arg_types,
+                                             const std::vector<TCppScope_t>& arg_scopes) {
     Sema &S = getSema();
     ASTContext &C = S.getASTContext();
     SourceLocation Loc;
-    OverloadCandidateSet candSet(Loc, OverloadCandidateSet::CSK_Normal);
 
-    QualType OT = QualType::getFromOpaquePtr(arg_types[0].m_Type).getNonReferenceType();
+    OverloadCandidateSet candSet(
+        Loc, OverloadCandidateSet::CandidateSetKind::CSK_Normal);
 
-    // TODO: compute proper objClass (rvalue vs lvalue) from OT/ref-qualifiers
-    Expr::Classification objClass = Expr::Classification::makeSimpleLValue();
-
-    SmallVector<Expr*, 8> args;
-    for (unsigned i = 1; i < arg_types.size(); ++i) {
-      QualType ArgTy =
-        QualType::getFromOpaquePtr(arg_types[i].m_Type).getNonReferenceType();
-
+    SmallVector<Expr*, 8> non_member_args;
+    SmallVector<Expr*, 8> member_args;
+    for (unsigned i = 0; i < arg_types.size(); ++i) {
+      QualType ArgTy = QualType::getFromOpaquePtr(arg_types[i].m_Type);
       Decl *ArgDecl = (Decl*)arg_scopes[i];
 
-      /* Overload resolution may involve instantiating unresolved templates. A common example
-       * of this is `std::cout << std::endl;`, where `std::endl` is a template but hasn't been
-       * resolved to a particular specialization until it's part of overload resolution with
-       * `std::cout`, which then provides the necessary char/char traits types. */
       if (auto *FTD = dyn_cast_or_null<FunctionTemplateDecl>(ArgDecl)) {
         UnresolvedSet<8> Unres;
         Unres.addDecl(FTD);
-
         DeclarationNameInfo NameInfo(FTD->getDeclName(), Loc);
-
-        // Create an UnresolvedLookupExpr that holds the template as an overload set.
         Expr *ULE = UnresolvedLookupExpr::Create(
-            C,
-            /*NamingClass=*/nullptr,
-            NestedNameSpecifierLoc(),
-            NameInfo,
-            /*RequiresADL=*/false,
-            Unres.begin(), Unres.end(),
-            /*KnownDependent=*/false,
-            /*KnownInstantiationDependent=*/false);
-
-        args.push_back(ULE);
-
-      } else if (auto *VD = dyn_cast_or_null<ValueDecl>(ArgDecl)) {
-        // Regular named value -> DeclRefExpr (lvalue)
-        DeclRefExpr *DRE = DeclRefExpr::Create(
-            C,
-            NestedNameSpecifierLoc(),
-            SourceLocation(),
-            VD,
-            /*RefersToEnclosingVariableOrCapture=*/false,
-            Loc,
-            ArgTy,
-            VK_LValue);
-        S.MarkDeclRefReferenced(DRE, /*Base*/ nullptr);
-        args.push_back(DRE);
-
-      } else if (ArgTy->isFunctionPointerType()) {
-        // Type-only fallback: null pointer cast to the function-pointer type
-        auto *NullPtr = new (C) CXXNullPtrLiteralExpr(C.NullPtrTy, Loc);
-        Expr *Cast = ImplicitCastExpr::Create(C, ArgTy, CK_NullToPointer, NullPtr,
-            /*BasePath=*/nullptr, VK_PRValue,
-            FPOptionsOverride());
-        args.push_back(Cast);
-
+            C, /*NamingClass=*/nullptr, NestedNameSpecifierLoc(), NameInfo,
+            /*RequiresADL=*/false, Unres.begin(), Unres.end(),
+            /*KnownDependent=*/false, /*KnownInstantiationDependent=*/false);
+        non_member_args.push_back(ULE);
+        if (i)
+          member_args.push_back(ULE);
       } else {
-        // Fabricate a prvalue of the requested type
-        args.push_back(new (C) ImplicitValueInitExpr{ArgTy});
+        ExprValueKind ExprKind = ExprValueKind::VK_PRValue;
+        if (ArgTy->isLValueReferenceType())
+          ExprKind = ExprValueKind::VK_LValue;
+        else if (ArgTy->isRValueReferenceType())
+          ExprKind = ExprValueKind::VK_XValue;
+
+        auto *Expr = new (C) OpaqueValueExpr(SourceLocation::getFromRawEncoding(1), ArgTy.getNonReferenceType(), ExprKind);
+
+        non_member_args.push_back(Expr);
+        if (i)
+          member_args.push_back(non_member_args.back());
       }
     }
 
+    bool has_member_candidate{};
     for (TCppScope_t F : candidates) {
-      Decl* D = (Decl*)F;
+      Decl *D = (Decl*)F;
+
       if (auto *MD = dyn_cast<CXXMethodDecl>(D)) {
-        if (MD->isDeleted()) continue;
-        DeclAccessPair found = DeclAccessPair::make(MD, MD->getAccess());
-        S.AddMethodCandidate(found, OT, objClass, args, candSet);
+        if (MD->isDeleted())
+          continue;
+        if (!MD->isStatic()) {
+          DeclAccessPair found = DeclAccessPair::make(MD, MD->getAccess());
+          TemplateArgumentListInfo ExplicitTemplateArgs{};
+
+          if (auto *CD = dyn_cast<CXXConstructorDecl>(D)) {
+            if (auto *FTD = dyn_cast<FunctionTemplateDecl>(MD))
+              S.AddTemplateOverloadCandidate(FTD, found, &ExplicitTemplateArgs, non_member_args, candSet);
+            else
+              S.AddOverloadCandidate(CD, found, non_member_args, candSet);
+            continue;
+          }
+
+          if (arg_types.empty())
+            continue;
+
+          QualType OT = QualType::getFromOpaquePtr(arg_types[0].m_Type);
+          ExprValueKind ExprKind = ExprValueKind::VK_PRValue;
+          if (OT->isLValueReferenceType())
+            ExprKind = ExprValueKind::VK_LValue;
+          else if (OT->isRValueReferenceType())
+            ExprKind = ExprValueKind::VK_XValue;
+
+          OpaqueValueExpr Expr(SourceLocation::getFromRawEncoding(1), OT.getNonReferenceType(), ExprKind);
+          Expr::Classification objClass = Expr.Classify(C);
+
+          has_member_candidate = true;
+          if (auto *MTD = dyn_cast<FunctionTemplateDecl>(MD)) {
+            S.AddMethodTemplateCandidate(MTD, found, MD->getParent(), &ExplicitTemplateArgs, OT.getNonReferenceType(), objClass, member_args, candSet);
+            continue;
+          } else {
+            S.AddMethodCandidate(found, OT.getNonReferenceType(), objClass, member_args, candSet);
+            continue;
+          }
+        }
+      }
+
+      if (auto *FTD = dyn_cast<FunctionTemplateDecl>(D)) {
+        TemplateArgumentListInfo ExplicitTemplateArgs{};
+        S.AddTemplateOverloadCandidate(FTD, DeclAccessPair::make(FTD, FTD->getAccess()), &ExplicitTemplateArgs, non_member_args, candSet);
+        continue;
+      }
+      if (auto *FD = dyn_cast<FunctionDecl>(D)) {
+        S.AddOverloadCandidate(FD, DeclAccessPair::make(FD, FD->getAccess()), non_member_args, candSet);
+        continue;
       }
     }
 
-    OverloadCandidateSet::iterator bestCand;
-    candSet.BestViableFunction(S, Loc, bestCand);
-    if (bestCand != candSet.end() && bestCand->Viable)
-      return bestCand->Function;
+    OverloadCandidateSet::iterator best;
+    candSet.BestViableFunction(S, Loc, best);
+    if (best != candSet.end() && best->Viable)
+      return { best->Function };
 
-    return nullptr;
+    auto ambiguous = candSet.CompleteCandidates(S, OverloadCandidateDisplayKind::OCD_AmbiguousCandidates, non_member_args);
+    if(ambiguous.empty() && has_member_candidate)
+      ambiguous = candSet.CompleteCandidates(S, OverloadCandidateDisplayKind::OCD_AmbiguousCandidates, member_args);
+
+    return std::vector<TCppScope_t>(ambiguous.begin(), ambiguous.end());
   }
 
   // Gets the AccessSpecifier of the function and checks if it is equal to
@@ -4990,7 +5006,7 @@ namespace Cpp {
   bool InstantiateFunction(clang::FunctionDecl *FD) {
     // Ignore if not a template instantiation
     if (!(FD->isTemplateInstantiation() && !FD->isDefined()))
-      return true;
+      return false;
 
     clang::Sema &S = getSema();
     clang::DiagnosticErrorTrap Trap(S.getDiagnostics());
@@ -5241,18 +5257,78 @@ namespace Cpp {
     return (OperatorArity)~0U;
   }
 
-  void GetOperator(TCppScope_t scope, Operator op,
-                   std::vector<TCppFunction_t>& operators, OperatorArity kind) {
-    Decl* D = static_cast<Decl*>(scope);
-    if (auto* DC = llvm::dyn_cast_or_null<DeclContext>(D)) {
-      ASTContext& C = getSema().getASTContext();
-      DeclContextLookupResult Result =
-          DC->lookup(C.DeclarationNames.getCXXOperatorName(
-              (clang::OverloadedOperatorKind)op));
+  void GetOperator(Operator op, std::vector<TemplateArgInfo> const &arg_types, std::vector<TCppFunction_t> &operators, OperatorArity kind) {
+    Sema &S = getSema();
+    ASTContext &Ctx = S.Context;
 
-      for (auto* i : Result) {
-        if (kind & GetOperatorArity(i))
-          operators.push_back(i);
+    const auto Op = static_cast<OverloadedOperatorKind>(op);
+    DeclarationName OpName = Ctx.DeclarationNames.getCXXOperatorName(Op);
+
+    llvm::SmallPtrSet<const NamedDecl*, 32> Seen;
+
+    auto pushIfNew = [&](NamedDecl *ND) {
+      if (!ND) return;
+      if (Seen.insert(ND).second) {
+        if (kind & GetOperatorArity(ND))
+          operators.push_back(ND);
+      }
+    };
+
+    UnresolvedSet<16> Fns;
+    S.LookupOverloadedOperatorName(Op, S.getCurScope(), Fns);
+    for (auto I = Fns.begin(); I != Fns.end(); ++I) {
+      if (auto *FTD = llvm::dyn_cast<FunctionTemplateDecl>(I.getPair().getDecl()))
+        pushIfNew(FTD);
+      else
+        pushIfNew(I.getPair().getDecl()->getUnderlyingDecl());
+    }
+
+    // --- 1) Build operand exprs (types must be exactly your operands).
+    llvm::SmallVector<Expr*, 2> ArgExprs;
+    ArgExprs.reserve(arg_types.size());
+    for (auto const &arg_type : arg_types) {
+      QualType T = QualType::getFromOpaquePtr(arg_type.m_Type);
+      T = Ctx.getCanonicalType(T).getUnqualifiedType().getNonReferenceType();
+      ArgExprs.push_back(new (Ctx) OpaqueValueExpr(SourceLocation(), T, VK_LValue));
+    }
+
+    // --- 2) Collect associated namespaces/classes for ADL.
+    Sema::AssociatedNamespaceSet ANS;
+    Sema::AssociatedClassSet     ACS;
+    S.FindAssociatedClassesAndNamespaces(SourceLocation(), ArgExprs, ANS, ACS);
+
+    // --- 3) Search each associated namespace (PRIMARY context, via Sema).
+    for (auto *NS : ANS) {
+      DeclContext *PC = NS->getPrimaryContext();
+      LookupResult LR(S, OpName, SourceLocation(), Sema::LookupOperatorName);
+      S.LookupQualifiedName(LR, PC);
+      for (NamedDecl *ND : LR) {
+        if (auto *FTD = dyn_cast<FunctionTemplateDecl>(ND)) pushIfNew(FTD);
+        else if (auto *FD = dyn_cast<FunctionDecl>(ND))     pushIfNew(FD);
+      }
+    }
+
+    // --- 4) Search each associated class:
+    //       a) member operators (rare for != here)
+    //       b) hidden friends declared inside the class (ADL-only)
+    for (CXXRecordDecl *RD : ACS) {
+      DeclContext *PC = RD->getPrimaryContext();
+
+      // a) any member operator!= (unlikely for __normal_iterator, but cheap)
+      for (NamedDecl *ND : PC->lookup(OpName)) {
+        if (auto *FTD = dyn_cast<FunctionTemplateDecl>(ND)) pushIfNew(FTD);
+        else if (auto *FD = dyn_cast<FunctionDecl>(ND))     pushIfNew(FD);
+      }
+
+      // b) hidden friends: these are NOT found by ordinary lookup
+      for (FriendDecl *F : RD->friends()) {
+        if (auto *FriendND = dyn_cast_or_null<NamedDecl>(F->getFriendDecl())) {
+          auto name = FriendND->getDeclName();
+          if (name.getCXXOverloadedOperator() == Op) {
+            if (auto *FTD = dyn_cast<FunctionTemplateDecl>(FriendND)) pushIfNew(FTD);
+            else if (auto *FD = dyn_cast<FunctionDecl>(FriendND))     pushIfNew(FD);
+          }
+        }
       }
     }
   }
