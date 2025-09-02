@@ -2027,6 +2027,8 @@ namespace Cpp {
   }
 
   TCppType_t GetPointeeType(TCppType_t type) {
+    if (IsArrayType(type))
+      return GetArrayElementType(type);
     if (!IsPointerType(type))
       return nullptr;
     QualType QT = QualType::getFromOpaquePtr(type);
