@@ -4637,7 +4637,8 @@ namespace Cpp {
   } // namespace
 
   TInterp_t CreateInterpreter(const std::vector<const char*>& Args /*={}*/,
-                              const std::vector<const char*>& GpuArgs /*={}*/) {
+                              const std::vector<const char*>& GpuArgs /*={}*/,
+                              const std::optional<int> &CM /*=std::nullopt*/) {
     std::string MainExecutableName =
       sys::fs::getMainExecutable(nullptr, nullptr);
     std::string ResourceDir = MakeResourcesPath();
@@ -4679,7 +4680,7 @@ namespace Cpp {
                    std::back_inserter(ClingArgv),
                    [&](const std::string& str) { return str.c_str(); });
 
-    auto I = new compat::Interpreter(ClingArgv.size(), &ClingArgv[0]);
+    auto I = new compat::Interpreter(ClingArgv.size(), &ClingArgv[0], 0, {}, 0, true, CM);
 
     // Honor -mllvm.
     //

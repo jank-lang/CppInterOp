@@ -237,7 +237,8 @@ inline void codeComplete(std::vector<std::string>& Results,
 namespace compat {
 
 inline std::unique_ptr<clang::Interpreter>
-createClangInterpreter(std::vector<const char*>& args) {
+createClangInterpreter(std::vector<const char*>& args,
+                       const std::optional<int> &CM = std::nullopt) {
 #if CLANG_VERSION_MAJOR < 16
   auto ciOrErr = clang::IncrementalCompilerBuilder::create(args);
 #else
@@ -282,10 +283,14 @@ createClangInterpreter(std::vector<const char*>& args) {
   (*ciOrErr)->LoadRequestedPlugins();
   if (CudaEnabled)
     DeviceCI->LoadRequestedPlugins();
+
+  std::optional<llvm::CodeModel::Model> TCM;
+  if (CM)
+    TCM = static_cast<llvm::CodeModel::Model>(*CM);
   auto innerOrErr =
       CudaEnabled ? clang::Interpreter::createWithCUDA(std::move(*ciOrErr),
                                                        std::move(DeviceCI))
-                  : clang::Interpreter::create(std::move(*ciOrErr));
+                  : clang::Interpreter::create(std::move(*ciOrErr), nullptr, TCM);
 #endif // CLANG_VERSION_MAJOR < 16
 
   if (!innerOrErr) {

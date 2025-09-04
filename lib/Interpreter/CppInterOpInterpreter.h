@@ -145,7 +145,8 @@ public:
   Interpreter(int argc, const char* const* argv, const char* llvmdir = 0,
               const std::vector<std::shared_ptr<clang::ModuleFileExtension>>&
                   moduleExtensions = {},
-              void* extraLibHandle = 0, bool noRuntime = true) {
+              void* extraLibHandle = 0, bool noRuntime = true,
+              const std::optional<int> &CM = std::nullopt) {
     // Initialize all targets (required for device offloading)
     llvm::InitializeAllTargetInfos();
     llvm::InitializeAllTargets();
@@ -155,7 +156,7 @@ public:
     std::vector<const char*> vargs(argv + 1, argv + argc);
     vargs.push_back("-include");
     vargs.push_back("new");
-    inner = compat::createClangInterpreter(vargs);
+    inner = compat::createClangInterpreter(vargs, CM);
   }
 
   ~Interpreter() {}
