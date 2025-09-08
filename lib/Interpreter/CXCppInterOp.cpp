@@ -1,3 +1,4 @@
+#if 0
 #include "clang-c/CXCppInterOp.h"
 #include "Compatibility.h"
 #include "clang/AST/CXXInheritance.h"
@@ -613,3 +614,4 @@ void Destruct(compat::Interpreter& interp, TCppObject_t This,
 void clang_destruct(CXObject This, CXScope S, bool withFree) {
   Cpp::Destruct(*getInterpreter(S), This, getDecl(S), withFree);
 }
+#endif

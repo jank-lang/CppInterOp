@@ -2665,7 +2665,7 @@ namespace Cpp {
 
     int get_wrapper_code(compat::Interpreter& I, const FunctionDecl* FD,
                          const std::vector<TCppType_t> &arg_types,
-                         std::string& wrapper_name, std::string& wrapper) {
+                         std::string const &wrapper_name, std::string& wrapper) {
       assert(FD && "generate_wrapper called without a function decl!");
       ASTContext& Context = FD->getASTContext();
       PrintingPolicy Policy(Context.getPrintingPolicy());
@@ -3042,21 +3042,7 @@ namespace Cpp {
       }
       unsigned min_args = FD->getMinRequiredArguments();
       unsigned num_params = FD->getNumParams();
-      //
-      //  Make the wrapper name.
-      //
-      {
-        std::ostringstream buf;
-        buf.imbue(std::locale("C"));
-        buf << "__cf";
-        // const NamedDecl* ND = dyn_cast<NamedDecl>(FD);
-        // std::string mn;
-        // fInterp->maybeMangleDeclName(ND, mn);
-        // buf << '_' << mn;
-        buf << '_' << gWrapperSerial++;
-        wrapper_name = buf.str();
-        LLVM_DEBUG(dbgs() << "Wrapper name (FD): " << wrapper_name << "\n");
-      }
+      LLVM_DEBUG(dbgs() << "Wrapper name (FD): " << wrapper_name << "\n");
       //
       //  Write the wrapper code.
       // FIXME: this should be synthesized into the AST!
@@ -3108,7 +3094,7 @@ namespace Cpp {
     }
 
     int get_value_wrapper_code(compat::Interpreter& I, const FunctionDecl* FD,
-                               std::string& wrapper_name, std::string& wrapper) {
+                               std::string const &wrapper_name, std::string& wrapper) {
       assert(FD && "generate_wrapper called without a decl!");
       ASTContext& Context = FD->getASTContext();
       PrintingPolicy Policy(Context.getPrintingPolicy());
@@ -3127,21 +3113,7 @@ namespace Cpp {
         ND->getNameForDiagnostic(stream, Policy, /*Qualified=*/true);
         stream.flush();
       }
-      //
-      //  Make the wrapper name.
-      //
-      {
-        std::ostringstream buf;
-        buf.imbue(std::locale("C"));
-        buf << "__cf";
-        // const NamedDecl* ND = dyn_cast<NamedDecl>(FD);
-        // std::string mn;
-        // fInterp->maybeMangleDeclName(ND, mn);
-        // buf << '_' << mn;
-        buf << '_' << gWrapperSerial++;
-        wrapper_name = buf.str();
-        LLVM_DEBUG(dbgs() << "Wrapper name (FD value): " << wrapper_name << "\n");
-      }
+      LLVM_DEBUG(dbgs() << "Wrapper name (FD value): " << wrapper_name << "\n");
       //
       //  Write the wrapper code.
       // FIXME: this should be synthesized into the AST!
@@ -3184,7 +3156,7 @@ namespace Cpp {
     }
 
     int get_wrapper_code(compat::Interpreter& I, const FieldDecl* FD,
-                         std::string& wrapper_name, std::string& wrapper) {
+                         std::string const &wrapper_name, std::string& wrapper) {
       assert(FD && "generate_wrapper called without a field decl!");
       ASTContext& Context = FD->getASTContext();
       PrintingPolicy Policy(Context.getPrintingPolicy());
@@ -3203,21 +3175,7 @@ namespace Cpp {
         ND->getNameForDiagnostic(stream, Policy, /*Qualified=*/true);
         stream.flush();
       }
-      //
-      //  Make the wrapper name.
-      //
-      {
-        std::ostringstream buf;
-        buf.imbue(std::locale("C"));
-        buf << "__cf";
-        // const NamedDecl* ND = dyn_cast<NamedDecl>(FD);
-        // std::string mn;
-        // fInterp->maybeMangleDeclName(ND, mn);
-        // buf << '_' << mn;
-        buf << '_' << gWrapperSerial++;
-        wrapper_name = buf.str();
-        LLVM_DEBUG(dbgs() << "Wrapper name (FD): " << wrapper_name << "\n");
-      }
+      LLVM_DEBUG(dbgs() << "Wrapper name (FD): " << wrapper_name << "\n");
       //
       //  Write the wrapper code.
       // FIXME: this should be synthesized into the AST!
@@ -3267,25 +3225,11 @@ namespace Cpp {
     }
 
     int get_wrapper_code(compat::Interpreter& I, const VarDecl* VD,
-                         std::string& wrapper_name, std::string& wrapper) {
+                         std::string const &wrapper_name, std::string& wrapper) {
       assert(VD && "generate_wrapper called without a var decl!");
       ASTContext& Context = VD->getASTContext();
       PrintingPolicy Policy(Context.getPrintingPolicy());
-      //
-      //  Make the wrapper name.
-      //
-      {
-        std::ostringstream buf;
-        buf.imbue(std::locale("C"));
-        buf << "__cf";
-        // const NamedDecl* ND = dyn_cast<NamedDecl>(FD);
-        // std::string mn;
-        // fInterp->maybeMangleDeclName(ND, mn);
-        // buf << '_' << mn;
-        buf << '_' << gWrapperSerial++;
-        wrapper_name = buf.str();
-        LLVM_DEBUG(dbgs() << "Wrapper name (var decl): " << wrapper_name << "\n");
-      }
+      LLVM_DEBUG(dbgs() << "Wrapper name (var decl): " << wrapper_name << "\n");
       //
       //  Write the wrapper code.
       // FIXME: this should be synthesized into the AST!
@@ -3342,25 +3286,11 @@ namespace Cpp {
     }
 
     int get_wrapper_code(compat::Interpreter& I, const EnumConstantDecl* ECD,
-                         std::string& wrapper_name, std::string& wrapper) {
+                         std::string const &wrapper_name, std::string& wrapper) {
       assert(ECD && "generate_wrapper called without a decl!");
       ASTContext& Context = ECD->getASTContext();
       PrintingPolicy Policy(Context.getPrintingPolicy());
-      //
-      //  Make the wrapper name.
-      //
-      {
-        std::ostringstream buf;
-        buf.imbue(std::locale("C"));
-        buf << "__cf";
-        // const NamedDecl* ND = dyn_cast<NamedDecl>(FD);
-        // std::string mn;
-        // fInterp->maybeMangleDeclName(ND, mn);
-        // buf << '_' << mn;
-        buf << '_' << gWrapperSerial++;
-        wrapper_name = buf.str();
-        LLVM_DEBUG(dbgs() << "Wrapper name (enum constant decl): " << wrapper_name << "\n");
-      }
+      LLVM_DEBUG(dbgs() << "Wrapper name (enum constant decl): " << wrapper_name << "\n");
       //
       //  Write the wrapper code.
       // FIXME: this should be synthesized into the AST!
@@ -3401,21 +3331,11 @@ namespace Cpp {
     }
 
     int get_builtin_ctor_wrapper_code(compat::Interpreter& I, const QualType& CT,
-                                      const QualType& AT, std::string& wrapper_name,
+                                      const QualType& AT, std::string const &wrapper_name,
                                       std::string& wrapper) {
       ASTContext& Context = getSema().getASTContext();
       PrintingPolicy Policy(Context.getPrintingPolicy());
-      //
-      //  Make the wrapper name.
-      //
-      {
-        std::ostringstream buf;
-        buf.imbue(std::locale("C"));
-        buf << "__cf";
-        buf << '_' << gWrapperSerial++;
-        wrapper_name = buf.str();
-        LLVM_DEBUG(dbgs() << "Wrapper name (builtin ctor): " << wrapper_name << "\n");
-      }
+      LLVM_DEBUG(dbgs() << "Wrapper name (builtin ctor): " << wrapper_name << "\n");
       //
       //  Write the wrapper code.
       // FIXME: this should be synthesized into the AST!
@@ -3484,21 +3404,11 @@ namespace Cpp {
 
     int get_aggregate_ctor_predicate_wrapper_code(compat::Interpreter& I, const QualType& T,
                                                   const std::vector<QualType>& ATs,
-                                                  std::string& wrapper_name,
+                                                  std::string const &wrapper_name,
                                                   std::string& wrapper) {
       ASTContext& Context = getSema().getASTContext();
       PrintingPolicy Policy(Context.getPrintingPolicy());
-      //
-      //  Make the wrapper name.
-      //
-      {
-        std::ostringstream buf;
-        buf.imbue(std::locale("C"));
-        buf << "__cf";
-        buf << '_' << gWrapperSerial++;
-        wrapper_name = buf.str();
-        LLVM_DEBUG(dbgs() << "Wrapper name (aggregate ctor predicate): " << wrapper_name << "\n");
-      }
+      LLVM_DEBUG(dbgs() << "Wrapper name (aggregate ctor predicate): " << wrapper_name << "\n");
       //
       //  Write the helper template code.
       // FIXME: this should be synthesized into the AST!
@@ -3522,11 +3432,7 @@ namespace Cpp {
 
         // Make a code string that follows this pattern:
         //
-        // if constexpr(requires{ T{ std::declval<Args>()... }; }) {
-        //   return true;
-        // } else {
-        //   return false;
-        // }
+        // return requires { T{ std::declval<Args>()... }; };
         //
         helper_buf << "template <typename T, typename... Args>\n"
                       "__attribute__((used)) "
@@ -3603,21 +3509,11 @@ namespace Cpp {
     }
 
     int get_aggregate_ctor_wrapper_code(compat::Interpreter& I, const QualType& T,
-                                        const std::vector<QualType>& ATs, std::string& wrapper_name,
-                                        std::string& wrapper) {
+                                        const std::vector<QualType>& ATs,
+                                        std::string const &wrapper_name, std::string& wrapper) {
       ASTContext& Context = getSema().getASTContext();
       PrintingPolicy Policy(Context.getPrintingPolicy());
-      //
-      //  Make the wrapper name.
-      //
-      {
-        std::ostringstream buf;
-        buf.imbue(std::locale("C"));
-        buf << "__cf";
-        buf << '_' << gWrapperSerial++;
-        wrapper_name = buf.str();
-        LLVM_DEBUG(dbgs() << "Wrapper name (aggregate ctor): " << wrapper_name << "\n");
-      }
+      LLVM_DEBUG(dbgs() << "Wrapper name (aggregate ctor): " << wrapper_name << "\n");
       //
       //  Write the wrapper code.
       // FIXME: this should be synthesized into the AST!
@@ -3691,21 +3587,11 @@ namespace Cpp {
 
     int get_builtin_operator_wrapper_code(compat::Interpreter& I, Operator op,
                                           const QualType& T,
-                                          const std::vector<QualType>& ATs, std::string& wrapper_name,
-                                          std::string& wrapper) {
+                                          const std::vector<QualType>& ATs,
+                                          std::string const &wrapper_name, std::string& wrapper) {
       ASTContext& Context = getSema().getASTContext();
       PrintingPolicy Policy(Context.getPrintingPolicy());
-      //
-      //  Make the wrapper name.
-      //
-      {
-        std::ostringstream buf;
-        buf.imbue(std::locale("C"));
-        buf << "__cf";
-        buf << '_' << gWrapperSerial++;
-        wrapper_name = buf.str();
-        LLVM_DEBUG(dbgs() << "Wrapper name (builtin operator): " << wrapper_name << "\n");
-      }
+      LLVM_DEBUG(dbgs() << "Wrapper name (builtin operator): " << wrapper_name << "\n");
       //
       //  Write the wrapper code.
       // FIXME: this should be synthesized into the AST!
@@ -3805,21 +3691,11 @@ namespace Cpp {
     }
 
     int get_apply_wrapper_code(compat::Interpreter& I, const QualType& T,
-                               const std::vector<QualType>& ATs, std::string& wrapper_name,
+                               const std::vector<QualType>& ATs, std::string const &wrapper_name,
                                std::string& wrapper) {
       ASTContext& Context = getSema().getASTContext();
       PrintingPolicy Policy(Context.getPrintingPolicy());
-      //
-      //  Make the wrapper name.
-      //
-      {
-        std::ostringstream buf;
-        buf.imbue(std::locale("C"));
-        buf << "__cf";
-        buf << '_' << gWrapperSerial++;
-        wrapper_name = buf.str();
-        LLVM_DEBUG(dbgs() << "Wrapper name (apply): " << wrapper_name << "\n");
-      }
+      LLVM_DEBUG(dbgs() << "Wrapper name (apply): " << wrapper_name << "\n");
       //
       //  Write the wrapper code.
       // FIXME: this should be synthesized into the AST!
@@ -3901,7 +3777,8 @@ namespace Cpp {
     template <WrapperKind K = WrapperKind::Jit>
     auto make_wrapper(compat::Interpreter& I,
                       const FunctionDecl* FD,
-                      const std::vector<TCppType_t> &arg_types) {
+                      const std::vector<TCppType_t> &arg_types,
+                      std::string const &wrapper_name) {
       using Ret = std::conditional_t<K == WrapperKind::Jit, JitCall::GenericCall, AotCall*>;
       using Key = std::pair<const FunctionDecl*, std::vector<TCppType_t>>;
       static std::map<Key, Ret> gWrapperStore;
@@ -3910,7 +3787,6 @@ namespace Cpp {
       if (R != gWrapperStore.end())
         return R->second;
 
-      std::string wrapper_name;
       std::string wrapper_code;
 
       if (get_wrapper_code(I, FD, arg_types, wrapper_name, wrapper_code) == 0)
@@ -3941,7 +3817,7 @@ namespace Cpp {
     }
 
     template <WrapperKind K = WrapperKind::Jit>
-    auto make_value_wrapper(compat::Interpreter& I, const FunctionDecl* FD) {
+    auto make_value_wrapper(compat::Interpreter& I, const FunctionDecl* FD, std::string const &wrapper_name) {
       using Ret = std::conditional_t<K == WrapperKind::Jit, JitCall::GenericCall, AotCall*>;
       static std::map<const FunctionDecl*, Ret> gWrapperStore;
 
@@ -3949,7 +3825,6 @@ namespace Cpp {
       if (R != gWrapperStore.end())
         return R->second;
 
-      std::string wrapper_name;
       std::string wrapper_code;
 
       if (get_value_wrapper_code(I, FD, wrapper_name, wrapper_code) == 0)
@@ -3981,7 +3856,8 @@ namespace Cpp {
 
     template <WrapperKind K>
     auto make_wrapper(compat::Interpreter& I,
-                      const FieldDecl* FD) {
+                      const FieldDecl* FD,
+                      std::string const &wrapper_name) {
       using Ret = std::conditional_t<K == WrapperKind::Jit, JitCall::GenericCall, AotCall*>;
       static std::map<const FieldDecl*, Ret> gWrapperStore;
 
@@ -3989,7 +3865,6 @@ namespace Cpp {
       if (R != gWrapperStore.end())
         return R->second;
 
-      std::string wrapper_name;
       std::string wrapper_code;
 
       if (get_wrapper_code(I, FD, wrapper_name, wrapper_code) == 0)
@@ -4018,7 +3893,8 @@ namespace Cpp {
 
     template <WrapperKind K>
     auto make_wrapper(compat::Interpreter& I,
-                      const VarDecl* VD) {
+                      const VarDecl* VD,
+                      std::string const &wrapper_name) {
       using Ret = std::conditional_t<K == WrapperKind::Jit, JitCall::GenericCall, AotCall*>;
       static std::map<const VarDecl*, Ret> gWrapperStore;
 
@@ -4026,7 +3902,6 @@ namespace Cpp {
       if (R != gWrapperStore.end())
         return R->second;
 
-      std::string wrapper_name;
       std::string wrapper_code;
 
       if (get_wrapper_code(I, VD, wrapper_name, wrapper_code) == 0)
@@ -4055,7 +3930,8 @@ namespace Cpp {
 
     template <WrapperKind K>
     auto make_wrapper(compat::Interpreter& I,
-                      const EnumConstantDecl* ECD) {
+                      const EnumConstantDecl* ECD,
+                      std::string const &wrapper_name) {
       using Ret = std::conditional_t<K == WrapperKind::Jit, JitCall::GenericCall, AotCall*>;
       static std::map<const EnumConstantDecl*, Ret> gWrapperStore;
 
@@ -4063,7 +3939,6 @@ namespace Cpp {
       if (R != gWrapperStore.end())
         return R->second;
 
-      std::string wrapper_name;
       std::string wrapper_code;
 
       if (get_wrapper_code(I, ECD, wrapper_name, wrapper_code) == 0)
@@ -4091,7 +3966,7 @@ namespace Cpp {
     }
 
     template <WrapperKind K>
-    auto make_builtin_ctor_wrapper(compat::Interpreter& I, const QualType& CT, const QualType& AT) {
+    auto make_builtin_ctor_wrapper(compat::Interpreter& I, const QualType& CT, const QualType& AT, std::string const &wrapper_name) {
       using Ret = std::conditional_t<K == WrapperKind::Jit, JitCall::GenericCall, AotCall*>;
       static std::map<std::pair<QualType, QualType>, Ret> gWrapperStore;
 
@@ -4099,7 +3974,6 @@ namespace Cpp {
       if (R != gWrapperStore.end())
         return R->second;
 
-      std::string wrapper_name;
       std::string wrapper_code;
 
       if (get_builtin_ctor_wrapper_code(I, CT, AT, wrapper_name, wrapper_code) == 0)
@@ -4128,8 +4002,8 @@ namespace Cpp {
 
     JitCall::GenericCall make_aggregate_ctor_predicate_wrapper(compat::Interpreter& I,
                                                                const QualType& T,
-                                                               const std::vector<QualType>& ATs) {
-      std::string wrapper_name;
+                                                               const std::vector<QualType>& ATs,
+                                                               std::string const &wrapper_name) {
       std::string wrapper_code;
 
       if (get_aggregate_ctor_predicate_wrapper_code(I, T, ATs, wrapper_name, wrapper_code) == 0)
@@ -4156,7 +4030,7 @@ namespace Cpp {
 
     template <WrapperKind K>
     auto make_aggregate_ctor_wrapper(compat::Interpreter& I, const QualType& T,
-                                     const std::vector<QualType>& ATs) {
+                                     const std::vector<QualType>& ATs, std::string const &wrapper_name) {
       using Ret = std::conditional_t<K == WrapperKind::Jit, JitCall::GenericCall, AotCall*>;
       static std::map<std::pair<QualType, std::vector<QualType>>, Ret> gWrapperStore;
 
@@ -4164,7 +4038,6 @@ namespace Cpp {
       if (R != gWrapperStore.end())
         return R->second;
 
-      std::string wrapper_name;
       std::string wrapper_code;
 
       if (get_aggregate_ctor_wrapper_code(I, T, ATs, wrapper_name, wrapper_code) == 0)
@@ -4191,7 +4064,8 @@ namespace Cpp {
 
     template <WrapperKind K>
     auto make_builtin_operator_wrapper(compat::Interpreter& I, Operator op,
-                                       const QualType& T, const std::vector<QualType>& ATs) {
+                                       const QualType& T, const std::vector<QualType>& ATs,
+                                       std::string const &wrapper_name) {
       using Ret = std::conditional_t<K == WrapperKind::Jit, JitCall::GenericCall, AotCall*>;
       static std::map<std::pair<Operator, std::vector<QualType>>, Ret> gWrapperStore;
 
@@ -4199,7 +4073,6 @@ namespace Cpp {
       if (R != gWrapperStore.end())
         return R->second;
 
-      std::string wrapper_name;
       std::string wrapper_code;
 
       if (get_builtin_operator_wrapper_code(I, op, T, ATs, wrapper_name, wrapper_code) == 0)
@@ -4226,7 +4099,8 @@ namespace Cpp {
 
     template <WrapperKind K>
     auto make_apply_wrapper(compat::Interpreter& I,
-                            const QualType& T, const std::vector<QualType>& ATs) {
+                            const QualType& T, const std::vector<QualType>& ATs,
+                            std::string const &wrapper_name) {
       using Ret = std::conditional_t<K == WrapperKind::Jit, JitCall::GenericCall, AotCall*>;
       static std::map<std::pair<QualType, std::vector<QualType>>, Ret> gWrapperStore;
 
@@ -4234,7 +4108,6 @@ namespace Cpp {
       if (R != gWrapperStore.end())
         return R->second;
 
-      std::string wrapper_name;
       std::string wrapper_code;
 
       if (get_apply_wrapper_code(I, T, ATs, wrapper_name, wrapper_code) == 0)
@@ -4260,9 +4133,8 @@ namespace Cpp {
     }
 
     // FIXME: Sink in the code duplication from get_wrapper_code.
-    static std::string PrepareTorWrapper(const Decl* D,
-                                         const char* wrapper_prefix,
-                                         std::string& class_name) {
+    static void PrepareTorWrapper(const Decl* D,
+                                  std::string& class_name) {
       ASTContext &Context = D->getASTContext();
       PrintingPolicy Policy(Context.getPrintingPolicy());
       Policy.SuppressTagKeyword = true;
@@ -4285,29 +4157,12 @@ namespace Cpp {
         ND->getNameForDiagnostic(stream, Policy, /*Qualified=*/true);
         stream.flush();
       }
-
-      //
-      //  Make the wrapper name.
-      //
-      string wrapper_name;
-      {
-        ostringstream buf;
-        buf.imbue(std::locale("C"));
-        buf << wrapper_prefix;
-        //const NamedDecl* ND = dyn_cast<NamedDecl>(FD);
-        //string mn;
-        //fInterp->maybeMangleDeclName(ND, mn);
-        //buf << '_dtor_' << mn;
-        buf << '_' << gWrapperSerial++;
-        wrapper_name = buf.str();
-      }
-
-      return wrapper_name;
     }
 
     template <WrapperKind K = WrapperKind::Jit>
     static auto make_dtor_wrapper(compat::Interpreter& interp,
-                                  const Decl *D) {
+                                  const Decl *D,
+                                  std::string const &wrapper_name) {
       // Make a code string that follows this pattern:
       //
       // void
@@ -4326,11 +4181,8 @@ namespace Cpp {
       if (I != gDtorWrapperStore.end())
         return I->second;
 
-      //
-      //  Make the wrapper name.
-      //
       std::string class_name;
-      string wrapper_name = PrepareTorWrapper(D, "__dtor", class_name);
+      PrepareTorWrapper(D, class_name);
       //
       //  Write the wrapper code.
       //
@@ -4374,16 +4226,12 @@ namespace Cpp {
       // End of JitCall Helper Functions
 
     bool IsAggregateConstructible(TCppType_t to_type,
-                                  const std::vector<TemplateArgInfo> &member_types) {
+                                  const std::vector<TemplateArgInfo> &member_types,
+                                  std::string const &name) {
       QualType ToTy = QualType::getFromOpaquePtr(to_type);
-
-      static std::map<QualType, bool> gStore;
-      auto I = gStore.find(ToTy);
-      if (I != gStore.end())
-        return I->second;
+      static std::map<std::pair<QualType, std::vector<QualType>>, bool> gStore;
 
       if (!ToTy->isAggregateType()) {
-        gStore.emplace(ToTy, false);
         return false;
       }
 
@@ -4394,15 +4242,17 @@ namespace Cpp {
         MTs.emplace_back(QualType::getFromOpaquePtr(MT.m_Type));
       }
 
+      auto I = gStore.find({ ToTy, MTs });
+      if (I != gStore.end())
+        return I->second;
+
       /* TODO: Use Clang to figure this out instead of JIT compiling a trait. */
-      if (auto* Wrapper = make_aggregate_ctor_predicate_wrapper(getInterp(), ToTy, MTs)) {
-        bool Result = false;
+      bool Result = false;
+      if (auto* Wrapper = make_aggregate_ctor_predicate_wrapper(getInterp(), ToTy, MTs, name)) {
         Wrapper(nullptr, 0, nullptr, &Result);
-        gStore.emplace(ToTy, Result);
-        return Result;
       }
-      gStore.emplace(ToTy, false);
-      return false;
+      gStore.emplace(std::make_pair(ToTy, MTs), Result);
+      return Result;
     }
 
     bool IsTriviallyDestructible(TCppType_t type) {
@@ -4415,34 +4265,7 @@ namespace Cpp {
       return T.isDestructedType() == clang::QualType::DK_none;
     }
 
-    CPPINTEROP_API JitCall MakeFunctionCallable(TInterp_t I,
-                                                TCppConstFunction_t func) {
-      const auto* D = static_cast<const clang::Decl*>(func);
-      if (!D)
-        return {};
-
-      auto* interp = static_cast<compat::Interpreter*>(I);
-
-      // FIXME: Unify with make_wrapper.
-      if (const auto* Dtor = dyn_cast<CXXDestructorDecl>(D)) {
-        if (auto Wrapper = make_dtor_wrapper(*interp, Dtor->getParent()))
-          return {JitCall::kDestructorCall, Wrapper, Dtor};
-        // FIXME: else error we failed to compile the wrapper.
-        return {};
-      }
-
-      if (auto Wrapper = make_wrapper(*interp, cast<FunctionDecl>(D), {})) {
-        return {JitCall::kGenericCall, Wrapper, cast<FunctionDecl>(D)};
-      }
-      // FIXME: else error we failed to compile the wrapper.
-      return {};
-    }
-
-    CPPINTEROP_API JitCall MakeFunctionCallable(TCppConstFunction_t func) {
-      return MakeFunctionCallable(&getInterp(), func);
-    }
-
-    AotCall MakeAotCallable(TInterp_t I, TCppScope_t scope) {
+    AotCall MakeAotCallable(TInterp_t I, TCppScope_t scope, const std::string &name) {
       const auto* D = static_cast<const clang::Decl*>(scope);
       if (!D)
         return {};
@@ -4451,14 +4274,14 @@ namespace Cpp {
 
       // FIXME: Unify with make_wrapper.
       if (const auto* Dtor = dyn_cast<CXXDestructorDecl>(D)) {
-        if (auto Wrapper = make_dtor_wrapper<WrapperKind::Aot>(*interp, Dtor->getParent()))
+        if (auto Wrapper = make_dtor_wrapper<WrapperKind::Aot>(*interp, Dtor->getParent(), name))
           return *Wrapper;
         // FIXME: else error we failed to compile the wrapper.
         return {};
       }
 
       if (const auto* F = dyn_cast<FunctionDecl>(D)) {
-        if (auto Wrapper = make_wrapper<WrapperKind::Aot>(*interp, F, {})) {
+        if (auto Wrapper = make_wrapper<WrapperKind::Aot>(*interp, F, {}, name)) {
           return *Wrapper;
         }
         // FIXME: else error we failed to compile the wrapper.
@@ -4466,7 +4289,7 @@ namespace Cpp {
       }
 
       if (const auto* F = dyn_cast<FieldDecl>(D)) {
-        if (auto Wrapper = make_wrapper<WrapperKind::Aot>(*interp, F)) {
+        if (auto Wrapper = make_wrapper<WrapperKind::Aot>(*interp, F, name)) {
           return *Wrapper;
         }
         // FIXME: else error we failed to compile the wrapper.
@@ -4474,7 +4297,7 @@ namespace Cpp {
       }
 
       if (const auto* V = dyn_cast<VarDecl>(D)) {
-        if (auto Wrapper = make_wrapper<WrapperKind::Aot>(*interp, V)) {
+        if (auto Wrapper = make_wrapper<WrapperKind::Aot>(*interp, V, name)) {
           return *Wrapper;
         }
         // FIXME: else error we failed to compile the wrapper.
@@ -4482,7 +4305,7 @@ namespace Cpp {
       }
 
       if (const auto* E = dyn_cast<EnumConstantDecl>(D)) {
-        if (auto Wrapper = make_wrapper<WrapperKind::Aot>(*interp, E)) {
+        if (auto Wrapper = make_wrapper<WrapperKind::Aot>(*interp, E, name)) {
           return *Wrapper;
         }
         // FIXME: else error we failed to compile the wrapper.
@@ -4493,11 +4316,11 @@ namespace Cpp {
       return {};
     }
 
-    CPPINTEROP_API AotCall MakeAotCallable(TCppScope_t scope) {
-      return MakeAotCallable(&getInterp(), scope);
+    CPPINTEROP_API AotCall MakeAotCallable(TCppScope_t scope, const std::string &name) {
+      return MakeAotCallable(&getInterp(), scope, name);
     }
 
-    CPPINTEROP_API AotCall MakeAotCallable(TCppScope_t scope, const std::vector<TCppType_t> &arg_types) {
+    CPPINTEROP_API AotCall MakeAotCallable(TCppScope_t scope, const std::vector<TCppType_t> &arg_types, const std::string &name) {
       const auto* D = static_cast<const clang::Decl*>(scope);
       if (!D)
         return {};
@@ -4505,7 +4328,7 @@ namespace Cpp {
       auto &interp = getInterp();;
 
       if (const auto* F = dyn_cast<FunctionDecl>(D)) {
-        if (auto Wrapper = make_wrapper<WrapperKind::Aot>(interp, F, arg_types)) {
+        if (auto Wrapper = make_wrapper<WrapperKind::Aot>(interp, F, arg_types, name)) {
           return *Wrapper;
         }
         // FIXME: else error we failed to compile the wrapper.
@@ -4513,19 +4336,19 @@ namespace Cpp {
       }
     }
 
-    CPPINTEROP_API AotCall MakeBuiltinConstructorAotCallable(TCppType_t type) {
+    CPPINTEROP_API AotCall MakeBuiltinConstructorAotCallable(TCppType_t type, const std::string &name) {
       QualType CT = QualType::getFromOpaquePtr(type);
-      if (auto* Wrapper = make_builtin_ctor_wrapper<WrapperKind::Aot>(getInterp(), CT, {})) {
+      if (auto* Wrapper = make_builtin_ctor_wrapper<WrapperKind::Aot>(getInterp(), CT, {}, name)) {
         return *Wrapper;
       }
       // FIXME: else error we failed to compile the wrapper.
       return {};
     }
 
-    CPPINTEROP_API AotCall MakeBuiltinConstructorAotCallable(TCppType_t type, TCppType_t arg_type) {
+    CPPINTEROP_API AotCall MakeBuiltinConstructorAotCallable(TCppType_t type, TCppType_t arg_type, const std::string &name) {
       QualType CT = QualType::getFromOpaquePtr(type);
       QualType AT = QualType::getFromOpaquePtr(arg_type);
-      if (auto* Wrapper = make_builtin_ctor_wrapper<WrapperKind::Aot>(getInterp(), CT, AT)) {
+      if (auto* Wrapper = make_builtin_ctor_wrapper<WrapperKind::Aot>(getInterp(), CT, AT, name)) {
         return *Wrapper;
       }
       // FIXME: else error we failed to compile the wrapper.
@@ -4546,7 +4369,7 @@ namespace Cpp {
       return nullptr;
     }
 
-    CPPINTEROP_API AotCall MakeFunctionValueAotCallable(TCppScope_t scope, TCppType_t type) {
+    CPPINTEROP_API AotCall MakeFunctionValueAotCallable(TCppScope_t scope, TCppType_t type, const std::string &name) {
       auto* D = static_cast<clang::Decl*>(scope);
       if (!D)
         return {};
@@ -4559,7 +4382,7 @@ namespace Cpp {
           return {};
       }
       if (const auto* F = dyn_cast<FunctionDecl>(D)) {
-        if (auto Wrapper = make_value_wrapper<WrapperKind::Aot>(*interp, F)) {
+        if (auto Wrapper = make_value_wrapper<WrapperKind::Aot>(*interp, F, name)) {
           return *Wrapper;
         }
         // FIXME: else error we failed to compile the wrapper.
@@ -4570,42 +4393,43 @@ namespace Cpp {
     }
 
     AotCall MakeAggregateInitializationAotCallable(TCppType_t type,
-                                                   const std::vector<TemplateArgInfo>& arg_types) {
+                                                   const std::vector<TemplateArgInfo>& arg_types,
+                                                   const std::string &name) {
       QualType T = QualType::getFromOpaquePtr(type);
       std::vector<QualType> ATs;
       ATs.reserve(arg_types.size());
       for(auto MT : arg_types) {
         ATs.emplace_back(QualType::getFromOpaquePtr(MT.m_Type));
       }
-      if (auto Wrapper = make_aggregate_ctor_wrapper<WrapperKind::Aot>(getInterp(), T, ATs)) {
+      if (auto Wrapper = make_aggregate_ctor_wrapper<WrapperKind::Aot>(getInterp(), T, ATs, name)) {
         return *Wrapper;
       }
       // FIXME: else error we failed to compile the wrapper.
       return {};
     }
 
-    AotCall MakeBuiltinOperatorAotCallable(Operator op, TCppType_t type, const std::vector<TemplateArgInfo>& arg_types) {
+    AotCall MakeBuiltinOperatorAotCallable(Operator op, TCppType_t type, const std::vector<TemplateArgInfo>& arg_types, const std::string &name) {
       QualType T = QualType::getFromOpaquePtr(type);
       std::vector<QualType> ATs;
       ATs.reserve(arg_types.size());
       for(auto MT : arg_types) {
         ATs.emplace_back(QualType::getFromOpaquePtr(MT.m_Type));
       }
-      if (auto Wrapper = make_builtin_operator_wrapper<WrapperKind::Aot>(getInterp(), op, T, ATs)) {
+      if (auto Wrapper = make_builtin_operator_wrapper<WrapperKind::Aot>(getInterp(), op, T, ATs, name)) {
         return *Wrapper;
       }
       // FIXME: else error we failed to compile the wrapper.
       return {};
     }
 
-    AotCall MakeApplyCallable(TCppType_t type, const std::vector<TCppType_t>& arg_types) {
+    AotCall MakeApplyCallable(TCppType_t type, const std::vector<TCppType_t>& arg_types, const std::string &name) {
       QualType T = QualType::getFromOpaquePtr(type);
       std::vector<QualType> ATs;
       ATs.reserve(arg_types.size());
       for(auto MT : arg_types) {
         ATs.emplace_back(QualType::getFromOpaquePtr(MT));
       }
-      if (auto Wrapper = make_apply_wrapper<WrapperKind::Aot>(getInterp(), T, ATs)) {
+      if (auto Wrapper = make_apply_wrapper<WrapperKind::Aot>(getInterp(), T, ATs, name)) {
         return *Wrapper;
       }
       // FIXME: else error we failed to compile the wrapper.
@@ -5396,46 +5220,6 @@ namespace Cpp {
 
   void Deallocate(TCppScope_t scope, TCppObject_t address) {
     ::operator delete(address);
-  }
-
-  // FIXME: Add optional arguments to the operator new.
-  TCppObject_t Construct(compat::Interpreter& interp, TCppScope_t scope,
-                         void* arena /*=nullptr*/) {
-    auto* Class = (Decl*) scope;
-    // FIXME: Diagnose.
-    if (!HasDefaultConstructor(Class))
-      return nullptr;
-
-    auto* const Ctor = GetDefaultConstructor(interp, Class);
-    if (JitCall JC = MakeFunctionCallable(&interp, Ctor)) {
-      if (arena) {
-        JC.Invoke(&arena, {}, (void*)~0); // Tell Invoke to use placement new.
-        return arena;
-      }
-
-      void *obj = nullptr;
-      JC.Invoke(&obj);
-      return obj;
-    }
-    return nullptr;
-  }
-
-  TCppObject_t Construct(TCppScope_t scope, void* arena /*=nullptr*/) {
-    return Construct(getInterp(), scope, arena);
-  }
-
-  void Destruct(compat::Interpreter& interp, TCppObject_t This, Decl* Class,
-                bool withFree) {
-    if (auto wrapper = make_dtor_wrapper(interp, Class)) {
-      (*wrapper)(This, /*nary=*/0, withFree);
-      return;
-    }
-    // FIXME: Diagnose.
-  }
-
-  void Destruct(TCppObject_t This, TCppScope_t scope, bool withFree /*=true*/) {
-    auto* Class = static_cast<Decl*>(scope);
-    Destruct(getInterp(), This, Class, withFree);
   }
 
   class StreamCaptureInfo {
