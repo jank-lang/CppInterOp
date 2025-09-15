@@ -292,7 +292,8 @@ namespace Cpp {
 
   /// Checks if it is possible to aggregate construct one type from others.
   CPPINTEROP_API bool IsAggregateConstructible(TCppType_t to_type,
-                                               const std::vector<TemplateArgInfo> &member_types);
+                                               const std::vector<TemplateArgInfo> &member_types,
+                                               std::string const &name);
 
   CPPINTEROP_API bool IsTriviallyDestructible(TCppType_t type);
 
@@ -660,21 +661,21 @@ namespace Cpp {
 
   /// Creates a trampoline function by using the interpreter and returns a
   /// uniform interface to get the name and IR module for it.
-  CPPINTEROP_API AotCall MakeAotCallable(TCppScope_t scope);
+  CPPINTEROP_API AotCall MakeAotCallable(TCppScope_t scope, const std::string &name);
 
-  CPPINTEROP_API AotCall MakeAotCallable(TCppScope_t scope, const std::vector<TCppType_t> &arg_types);
+  CPPINTEROP_API AotCall MakeAotCallable(TCppScope_t scope, const std::vector<TCppType_t> &arg_types, const std::string &name);
 
-  CPPINTEROP_API AotCall MakeBuiltinConstructorAotCallable(TCppType_t type);
+  CPPINTEROP_API AotCall MakeBuiltinConstructorAotCallable(TCppType_t type, const std::string &name);
 
-  CPPINTEROP_API AotCall MakeBuiltinConstructorAotCallable(TCppType_t type, TCppType_t arg_type);
+  CPPINTEROP_API AotCall MakeBuiltinConstructorAotCallable(TCppType_t type, TCppType_t arg_type, const std::string &name);
 
-  CPPINTEROP_API AotCall MakeFunctionValueAotCallable(TCppScope_t scope, TCppType_t type);
+  CPPINTEROP_API AotCall MakeFunctionValueAotCallable(TCppScope_t scope, TCppType_t type, const std::string &name);
 
-  CPPINTEROP_API AotCall MakeAggregateInitializationAotCallable(TCppType_t type, const std::vector<TemplateArgInfo>& arg_types);
+  CPPINTEROP_API AotCall MakeAggregateInitializationAotCallable(TCppType_t type, const std::vector<TemplateArgInfo>& arg_types, const std::string &name);
 
-  CPPINTEROP_API AotCall MakeBuiltinOperatorAotCallable(Operator op, TCppType_t type, const std::vector<TemplateArgInfo>& arg_types);
+  CPPINTEROP_API AotCall MakeBuiltinOperatorAotCallable(Operator op, TCppType_t type, const std::vector<TemplateArgInfo>& arg_types, const std::string &name);
 
-  CPPINTEROP_API AotCall MakeApplyCallable(TCppType_t type, const std::vector<TCppType_t>& arg_types);
+  CPPINTEROP_API AotCall MakeApplyCallable(TCppType_t type, const std::vector<TCppType_t>& arg_types, const std::string &name);
 
   /// Checks if a function declared is of const type or not.
   CPPINTEROP_API bool IsConstMethod(TCppFunction_t method);
