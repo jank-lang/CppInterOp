@@ -3651,7 +3651,11 @@ namespace Cpp {
       }
       for (unsigned i = 0U; i < ATs.size(); ++i) {
         if(i == 1) {
-          exprbuf << " " << OpNameStr << " ";
+          if (op == OP_Subscript) {
+            exprbuf << "[ ";
+          } else {
+            exprbuf << " " << OpNameStr << " ";
+          }
         }
 
         QualType QT = ATs[i].getCanonicalType();
@@ -3666,17 +3670,21 @@ namespace Cpp {
                           isPointer, indent_level, true);
 
         if (refType != kNotReference) {
-          exprbuf << "(" << type_name.c_str()
+          exprbuf << "((" << type_name.c_str()
                   << (refType == kLValueReference ? "&" : "&&") << ")*("
-                  << type_name.c_str() << "*)args[" << i << "]";
+                  << type_name.c_str() << "*)args[" << i << "])";
         } else if (isPointer) {
-          exprbuf << "*(" << type_name.c_str() << "**)args[" << i << "]";
+          exprbuf << "(*(" << type_name.c_str() << "**)args[" << i << "])";
         } else {
           // pointer falls back to non-pointer case; the argument preserves
           // the "pointerness" (i.e. doesn't reference the value).
-          exprbuf << "*(" << type_name.c_str() << "*)args[" << i << "]";
+          exprbuf << "(*(" << type_name.c_str() << "*)args[" << i << "])";
         }
       }
+      if (op == OP_Subscript) {
+        exprbuf << " ]";
+      }
+
       exprbuf << ")";
       exprbuf << " };\n";
 
