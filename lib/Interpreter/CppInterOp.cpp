@@ -4470,6 +4470,7 @@ namespace Cpp {
 
   TInterp_t CreateInterpreter(const std::vector<const char*>& Args /*={}*/,
                               const std::vector<const char*>& GpuArgs /*={}*/,
+                              const std::map<char const*, std::string_view>& VFS /*={}*/,
                               const std::optional<int> &CM /*=std::nullopt*/) {
     std::string MainExecutableName =
       sys::fs::getMainExecutable(nullptr, nullptr);
@@ -4512,7 +4513,7 @@ namespace Cpp {
                    std::back_inserter(ClingArgv),
                    [&](const std::string& str) { return str.c_str(); });
 
-    auto I = new compat::Interpreter(ClingArgv.size(), &ClingArgv[0], 0, {}, 0, true, CM);
+    auto I = new compat::Interpreter(ClingArgv.size(), &ClingArgv[0], 0, {}, 0, true, VFS, CM);
 
     // Honor -mllvm.
     //

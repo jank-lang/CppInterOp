@@ -238,6 +238,7 @@ namespace compat {
 
 inline std::unique_ptr<clang::Interpreter>
 createClangInterpreter(std::vector<const char*>& args,
+                       const std::map<char const*, std::string_view>& VFS = {},
                        const std::optional<int> &CM = std::nullopt) {
 #if CLANG_VERSION_MAJOR < 16
   auto ciOrErr = clang::IncrementalCompilerBuilder::create(args);
@@ -283,6 +284,19 @@ createClangInterpreter(std::vector<const char*>& args,
   (*ciOrErr)->LoadRequestedPlugins();
   if (CudaEnabled)
     DeviceCI->LoadRequestedPlugins();
+
+  auto OverlayFS = llvm::makeIntrusiveRefCnt<llvm::vfs::OverlayFileSystem>(llvm::vfs::getRealFileSystem());
+  auto InMemFS = llvm::makeIntrusiveRefCnt<llvm::vfs::InMemoryFileSystem>();
+
+  for (const auto &pair : VFS) {
+    auto MemBuf = llvm::MemoryBuffer::getMemBuffer(
+        llvm::StringRef(pair.second.data(), pair.second.size()), pair.first,
+        /*RequiresNullTerminator=*/false);
+    InMemFS->addFile(pair.first, /*ModificationTime=*/0, std::move(MemBuf));
+  }
+
+  OverlayFS->pushOverlay(InMemFS);
+  (*ciOrErr)->createFileManager(OverlayFS);
 
   std::optional<llvm::CodeModel::Model> TCM;
   if (CM)
