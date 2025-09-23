@@ -2317,12 +2317,19 @@ namespace Cpp {
 
         case clang::Type::Record: {
           auto* RT = cast<RecordType>(T);
-          if (isa<ClassTemplateSpecializationDecl>(RT->getDecl())) {
-            std::string result;
-            PrintingPolicy localPolicy = Policy;
-            localPolicy.FullyQualifiedName = true;
-            QT.getAsStringInternal(result, localPolicy);
-            return result;
+          if (auto* CTSD = dyn_cast<ClassTemplateSpecializationDecl>(RT->getDecl())) {
+            // Handle ClassTemplateSpecializationDecl manually to ensure
+            // template arguments are also fully qualified
+            std::string base = printClassTemplateSpecialization(CTSD);
+
+            if (QT.hasLocalQualifiers()) {
+              std::string qualifiers;
+              if (QT.isConstQualified()) qualifiers += "const ";
+              if (QT.isVolatileQualified()) qualifiers += "volatile ";
+              if (QT.isRestrictQualified()) qualifiers += "restrict ";
+              return qualifiers + base;
+            }
+            return base;
           }
           return getFullyQualifiedName(RT->getDecl());
         }
@@ -2340,6 +2347,21 @@ namespace Cpp {
           return result;
         }
         }
+      }
+
+      std::string printClassTemplateSpecialization(const ClassTemplateSpecializationDecl* CTSD) {
+        std::string templateName = getFullyQualifiedName(CTSD->getSpecializedTemplate());
+        const TemplateArgumentList& ArgList = CTSD->getTemplateArgs();
+
+        std::string args = "<";
+        for (unsigned i = 0; i < ArgList.size(); ++i) {
+          if (i > 0)
+            args += ", ";
+          args += printTemplateArgument(ArgList[i]);
+        }
+        args += ">";
+
+        return templateName + args;
       }
 
       std::string printTemplateSpecialization(const TemplateSpecializationType* TST) {
