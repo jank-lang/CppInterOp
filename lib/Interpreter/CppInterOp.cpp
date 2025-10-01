@@ -3004,7 +3004,8 @@ namespace Cpp {
         make_narg_ctor_with_return(FD, N, class_name, buf, indent_level);
         return;
       }
-      QualType QT = FD->getReturnType();
+
+      QualType QT = FD->getReturnType().getCanonicalType();
       if (QT->isVoidType()) {
         std::ostringstream typedefbuf;
         std::ostringstream callbuf;
@@ -3069,6 +3070,7 @@ namespace Cpp {
       assert(FD && "generate_wrapper called without a function decl!");
       ASTContext& Context = FD->getASTContext();
       PrintingPolicy Policy(Context.getPrintingPolicy());
+
       //
       //  Get the class or namespace name.
       //
@@ -3442,7 +3444,7 @@ namespace Cpp {
       }
       unsigned min_args = FD->getMinRequiredArguments();
       unsigned num_params = FD->getNumParams();
-      LLVM_DEBUG(dbgs() << "Wrapper name (FD): " << wrapper_name << "\n");
+      LLVM_DEBUG(dbgs() << "Wrapper name (function): " << wrapper_name << "\n");
       //
       //  Write the wrapper code.
       // FIXME: this should be synthesized into the AST!
@@ -3575,7 +3577,7 @@ namespace Cpp {
         ND->getNameForDiagnostic(stream, Policy, /*Qualified=*/true);
         stream.flush();
       }
-      LLVM_DEBUG(dbgs() << "Wrapper name (FD): " << wrapper_name << "\n");
+      LLVM_DEBUG(dbgs() << "Wrapper name (field): " << wrapper_name << "\n");
       //
       //  Write the wrapper code.
       // FIXME: this should be synthesized into the AST!
