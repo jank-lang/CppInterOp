@@ -197,7 +197,6 @@ CXTypeKind cxtype_GetTypeKind(QualType T) {
     TKCASE(ExtVector);
     TKCASE(MemberPointer);
     TKCASE(Auto);
-    TKCASE(Elaborated);
     TKCASE(Pipe);
     TKCASE(Attributed);
 #if CLANG_VERSION_MAJOR >= 16

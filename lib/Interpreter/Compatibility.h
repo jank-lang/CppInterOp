@@ -298,13 +298,13 @@ createClangInterpreter(std::vector<const char*>& args,
   OverlayFS->pushOverlay(InMemFS);
   (*ciOrErr)->createFileManager(OverlayFS);
 
-  std::optional<llvm::CodeModel::Model> TCM;
+  clang::Interpreter::JITConfig JC;
   if (CM)
-    TCM = static_cast<llvm::CodeModel::Model>(*CM);
+    JC.CM = static_cast<llvm::CodeModel::Model>(*CM);
   auto innerOrErr =
       CudaEnabled ? clang::Interpreter::createWithCUDA(std::move(*ciOrErr),
                                                        std::move(DeviceCI))
-                  : clang::Interpreter::create(std::move(*ciOrErr), nullptr, TCM);
+                  : clang::Interpreter::create(std::move(*ciOrErr), JC);
 #endif // CLANG_VERSION_MAJOR < 16
 
   if (!innerOrErr) {

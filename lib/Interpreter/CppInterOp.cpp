@@ -446,7 +446,7 @@ namespace Cpp {
       return !Result.empty();
     };
 
-    const RecordDecl *Record = RT->getDecl();
+    const RecordDecl *Record = RT->getOriginalDecl();
     if (IsUseCountPresent(Record))
       return true;
 
@@ -505,7 +505,7 @@ namespace Cpp {
 
     QualType QT = QualType::getFromOpaquePtr(enum_type);
     if (auto *ET = QT->getAs<EnumType>())
-      return ET->getDecl()->getIntegerType().getAsOpaquePtr();
+      return ET->getOriginalDecl()->getIntegerType().getAsOpaquePtr();
 
     return nullptr;
   }
@@ -548,9 +548,9 @@ namespace Cpp {
   size_t GetSizeOfType(TCppType_t type) {
     QualType QT = QualType::getFromOpaquePtr(type);
     if (const EnumType *ET = QT->getAs<EnumType>())
-      QT = ET->getDecl()->getIntegerType();
+      QT = ET->getOriginalDecl()->getIntegerType();
     if (const TagType *TT = QT->getAs<TagType>())
-      return SizeOf(TT->getDecl());
+      return SizeOf(TT->getOriginalDecl());
 
     // FIXME: Can we get the size of a non-tag type?
     auto TI = getSema().getASTContext().getTypeInfo(QT);
@@ -561,9 +561,9 @@ namespace Cpp {
   size_t GetAlignmentOfType(TCppType_t type) {
     QualType QT = QualType::getFromOpaquePtr(type);
     if (const EnumType *ET = QT->getAs<EnumType>())
-      QT = ET->getDecl()->getIntegerType();
+      QT = ET->getOriginalDecl()->getIntegerType();
     if (const TagType *TT = QT->getAs<TagType>())
-      return AlignmentOf(TT->getDecl());
+      return AlignmentOf(TT->getOriginalDecl());
 
     auto TI = getSema().getASTContext().getTypeInfo(QT);
     size_t TypeAlign = TI.Align;
@@ -597,7 +597,7 @@ namespace Cpp {
     if (auto *ND = llvm::dyn_cast_or_null<NamedDecl>(D)) {
       if (auto *TD = llvm::dyn_cast<TagDecl>(ND)) {
         std::string type_name;
-        QualType QT = C.getTagDeclType(TD);
+        QualType QT = C.getCanonicalTagType(TD);
         PrintingPolicy Policy = C.getPrintingPolicy();
         Policy.SuppressUnwrittenScope = true;
         Policy.SuppressScope = true;
@@ -640,7 +640,7 @@ namespace Cpp {
     if (auto *ND = llvm::dyn_cast_or_null<NamedDecl>(D)) {
       if (auto *TD = llvm::dyn_cast<TagDecl>(ND)) {
         std::string type_name;
-        QualType QT = C.getTagDeclType(TD);
+        QualType QT = C.getCanonicalTagType(TD);
         QT.getAsStringInternal(type_name, C.getPrintingPolicy());
 
         return type_name;
@@ -680,7 +680,7 @@ namespace Cpp {
       Type = Type->getPointeeOrArrayElementType();
       Type = Type->getUnqualifiedDesugaredType();
       if (auto *ET = llvm::dyn_cast<EnumType>(Type))
-        return ET->getDecl();
+        return ET->getOriginalDecl();
       if (auto* FnType = llvm::dyn_cast<FunctionProtoType>(Type))
         Type = const_cast<clang::Type*>(FnType->getReturnType().getTypePtr());
       return Type->getAsCXXRecordDecl();
@@ -808,7 +808,7 @@ namespace Cpp {
 
     auto type = (CXXRD->bases_begin() + ibase)->getType();
     if (auto RT = type->getAs<RecordType>())
-      return (TCppScope_t)RT->getDecl();
+      return (TCppScope_t)RT->getOriginalDecl();
 
     return 0;
   }
@@ -1587,7 +1587,7 @@ namespace Cpp {
         if (auto* FD = llvm::dyn_cast<FieldDecl>(D)) {
           if (FD->isAnonymousStructOrUnion()) {
             if (const auto* RT = FD->getType()->getAs<RecordType>()) {
-              if (auto* CXXRD = llvm::dyn_cast<CXXRecordDecl>(RT->getDecl())) {
+              if (auto* CXXRD = llvm::dyn_cast<CXXRecordDecl>(RT->getOriginalDecl())) {
                 stack_begin.back()++;
                 stack_begin.push_back(CXXRD->decls_begin());
                 stack_end.push_back(CXXRD->decls_end());
@@ -1701,7 +1701,7 @@ namespace Cpp {
     // Ensure the class type is complete enough for lookup to visit bases, etc.
     // (Location can be empty; we just want to trigger completion if needed.)
     (void)S.RequireCompleteType(SourceLocation(),
-        Ctx.getRecordType(RD),
+        Ctx.getCanonicalTagType(RD),
         diag::err_typecheck_incomplete_tag);
 
     // Build the lookup name.
@@ -1720,7 +1720,7 @@ namespace Cpp {
         if (auto* CTD = Spec->getSpecializedTemplate()) {
           if (auto* Templated = CTD->getTemplatedDecl()) {
             (void)S.RequireCompleteType(SourceLocation(),
-                Ctx.getRecordType(Templated),
+                Ctx.getCanonicalTagType(Templated),
                 diag::err_typecheck_incomplete_tag);
             LookupResult R2(S, &II, SourceLocation(), Sema::LookupMemberName);
             S.LookupQualifiedName(R2, Templated);
@@ -1790,7 +1790,7 @@ namespace Cpp {
           const auto* RT = F->getType()->getAs<RecordType>();
           if (!RT)
             continue;
-          if (anon == RT->getDecl()) {
+          if (anon == RT->getOriginalDecl()) {
             FD = *F;
             break;
           }
@@ -2179,7 +2179,8 @@ namespace Cpp {
 
     auto *D = (Decl *) GetNamed(name, /* Within= */ 0);
     if (auto *TD = llvm::dyn_cast_or_null<TypeDecl>(D)) {
-      return QualType(TD->getTypeForDecl(), 0).getAsOpaquePtr();
+      QualType QT(getASTContext().getTypeDeclType(TD));
+      return QT.getAsOpaquePtr();
     }
 
     return (TCppType_t)0;
@@ -2213,7 +2214,7 @@ namespace Cpp {
     if (auto* CTD = dyn_cast<ClassTemplateDecl>(D)) {
       CXXRecordDecl* RD = CTD->getTemplatedDecl();
       if (RD) {
-        return C.getTypeDeclType(RD).getAsOpaquePtr();
+        return C.getCanonicalTagType(RD).getAsOpaquePtr();
       }
       return 0;
     }
@@ -2700,7 +2701,6 @@ namespace Cpp {
       ASTContext& C = FD ? FD->getASTContext() : getSema().getASTContext();
       PrintingPolicy Policy(C.getPrintingPolicy());
 #if CLANG_VERSION_MAJOR > 16
-      Policy.SuppressElaboration = true;
       Policy.FullyQualifiedName = true;
 #endif
       refType = kNotReference;
@@ -3081,7 +3081,7 @@ namespace Cpp {
       const clang::DeclContext* DC = get_non_transparent_decl_context(FD);
       if (const TypeDecl* TD = dyn_cast<TypeDecl>(DC)) {
         // This is a class, struct, or union member.
-        QualType QT(TD->getTypeForDecl(), 0);
+        QualType QT(Context.getTypeDeclType(TD));
         get_type_as_string(QT, class_name, Context, Policy);
       } else if (const NamedDecl* ND = dyn_cast<NamedDecl>(DC)) {
         // This is a namespace member.
@@ -3510,7 +3510,7 @@ namespace Cpp {
       const clang::DeclContext* DC = get_non_transparent_decl_context(FD);
       if (const TypeDecl* TD = dyn_cast<TypeDecl>(DC)) {
         // This is a class, struct, or union member.
-        QualType QT(TD->getTypeForDecl(), 0);
+        QualType QT(Context.getTypeDeclType(TD));
         get_type_as_string(QT, class_name, Context, Policy);
       } else if (const NamedDecl* ND = dyn_cast<NamedDecl>(DC)) {
         // This is a namespace member.
@@ -3572,7 +3572,7 @@ namespace Cpp {
       const clang::DeclContext* DC = get_non_transparent_decl_context(FD);
       if (const TypeDecl* TD = dyn_cast<TypeDecl>(DC)) {
         // This is a class, struct, or union member.
-        QualType QT(TD->getTypeForDecl(), 0);
+        QualType QT(Context.getTypeDeclType(TD));
         get_type_as_string(QT, class_name, Context, Policy);
       } else if (const NamedDecl* ND = dyn_cast<NamedDecl>(DC)) {
         // This is a namespace member.
@@ -4562,7 +4562,7 @@ namespace Cpp {
         if (const TypedefDecl *Typedef = dyn_cast<const TypedefDecl>(TD))
           QT = Typedef->getTypeSourceInfo()->getType();
         else
-          QT = {TD->getTypeForDecl(), 0};
+          QT = Context.getTypeDeclType(TD);
         get_type_as_string(QT, class_name, Context, Policy);
       } else if (const NamedDecl *ND = dyn_cast<NamedDecl>(D)) {
         // This is a namespace member.
@@ -5224,7 +5224,7 @@ namespace Cpp {
     }
 
     if (auto* VarTemplate = dyn_cast<VarTemplateDecl>(TemplateD)) {
-      DeclResult R = S.CheckVarTemplateId(VarTemplate, fakeLoc, fakeLoc, TLI);
+      DeclResult R = S.CheckVarTemplateId(VarTemplate, fakeLoc, fakeLoc, TLI, false);
       if (R.isInvalid()) {
         // FIXME: Diagnose
       }
@@ -5233,7 +5233,7 @@ namespace Cpp {
 
     // This will instantiate tape<T> type and return it.
     SourceLocation noLoc;
-    QualType TT = S.CheckTemplateIdType(TemplateName(TemplateD), noLoc, TLI);
+    QualType TT = S.CheckTemplateIdType(ElaboratedTypeKeyword::None, TemplateName(TemplateD), noLoc, TLI, nullptr, false);
 
     // Perhaps we can extract this into a new interface.
     S.RequireCompleteType(fakeLoc, TT, diag::err_tentative_def_incomplete_type);
@@ -5315,11 +5315,11 @@ namespace Cpp {
     clang::Sema &S = getSema();
     clang::QualType QT;
     if(auto *D = llvm::dyn_cast<ClassTemplateSpecializationDecl>((Decl*)spec))
-      QT = S.Context.getTypeDeclType(D);
+      QT = S.Context.getCanonicalTagType(D);
     else if(auto *D = llvm::dyn_cast<FunctionTemplateDecl>((Decl*)spec))
       QT = D->getTemplatedDecl()->getType();
     else if (auto *D = llvm::dyn_cast<CXXConstructorDecl>((Decl*)spec))
-      QT = S.Context.getTypeDeclType(D->getParent());
+      QT = S.Context.getCanonicalTagType(D->getParent());
     else if(auto *D = llvm::dyn_cast<FunctionDecl>((Decl*)spec))
       QT = D->getType();
 
