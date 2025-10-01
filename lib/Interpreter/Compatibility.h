@@ -296,7 +296,7 @@ createClangInterpreter(std::vector<const char*>& args,
   }
 
   OverlayFS->pushOverlay(InMemFS);
-  (*ciOrErr)->createFileManager(OverlayFS);
+  (*ciOrErr)->createVirtualFileSystem(OverlayFS);
 
   clang::Interpreter::JITConfig JC;
   if (CM)
