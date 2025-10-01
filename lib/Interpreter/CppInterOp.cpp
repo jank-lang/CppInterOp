@@ -2311,14 +2311,9 @@ namespace Cpp {
           return printTemplateSpecialization(TST);
         }
 
-        case clang::Type::Elaborated: {
-          auto* ET = cast<ElaboratedType>(T);
-          return printTypeRecursively(ET->getNamedType());
-        }
-
         case clang::Type::Record: {
           auto* RT = cast<RecordType>(T);
-          if (auto* CTSD = dyn_cast<ClassTemplateSpecializationDecl>(RT->getDecl())) {
+          if (auto* CTSD = dyn_cast<ClassTemplateSpecializationDecl>(RT->getOriginalDecl())) {
             // Handle ClassTemplateSpecializationDecl manually to ensure
             // template arguments are also fully qualified
             std::string base = printClassTemplateSpecialization(CTSD);
@@ -2332,7 +2327,7 @@ namespace Cpp {
             }
             return base;
           }
-          return getFullyQualifiedName(RT->getDecl());
+          return getFullyQualifiedName(RT->getOriginalDecl());
         }
 
         case clang::Type::Typedef: {
@@ -2484,7 +2479,7 @@ namespace Cpp {
           const TemplateArgument& TypeArg = Args[i];
           if (TypeArg.getKind() == TemplateArgument::Type) {
             if (auto* RT = TypeArg.getAsType()->getAs<RecordType>()) {
-              RecordDecl* RD = RT->getDecl();
+              RecordDecl* RD = RT->getOriginalDecl();
 
               for (auto* Member : RD->decls()) {
                 if (auto* VD = dyn_cast<VarDecl>(Member)) {
