@@ -2367,8 +2367,15 @@ namespace Cpp {
       std::string printTemplateSpecialization(const TemplateSpecializationType* TST) {
         std::string templateName;
 
-        if (auto* TD = TST->getTemplateName().getAsTemplateDecl()) {
-          templateName = getFullyQualifiedName(TD);
+        if (auto *TD = TST->getTemplateName().getAsTemplateDecl()) {
+          // If it's a class template, print the underlying templated record's
+          // qualified name — that gives the proper namespace qualification.
+          if (auto *CTD = dyn_cast<ClassTemplateDecl>(TD)) {
+            templateName = getFullyQualifiedName(CTD->getTemplatedDecl());
+          } else {
+            // fallback for other template decl kinds
+            templateName = getFullyQualifiedName(TD);
+          }
         } else {
           llvm::raw_string_ostream OS(templateName);
           TST->getTemplateName().print(OS, Policy);
@@ -2524,8 +2531,17 @@ namespace Cpp {
 
       std::string printTemplateSpecializationFromLoc(TemplateSpecializationTypeLoc TSTL) {
         std::string templateName;
-        if (auto* TD = TSTL.getTypePtr()->getTemplateName().getAsTemplateDecl()) {
-          templateName = getFullyQualifiedName(TD);
+        if (auto *TD = TSTL.getTypePtr()->getTemplateName().getAsTemplateDecl()) {
+          if (auto *CTD = dyn_cast<ClassTemplateDecl>(TD)) {
+            templateName = getFullyQualifiedName(CTD->getTemplatedDecl());
+          } else {
+            templateName = getFullyQualifiedName(TD);
+          }
+        } else {
+          // if we don't have a TemplateDecl, fall back to the raw printing
+          llvm::raw_string_ostream OS(templateName);
+          TSTL.getTypePtr()->getTemplateName().print(OS, Policy);
+          templateName = OS.str();
         }
 
         std::string args = "<";
