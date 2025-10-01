@@ -2283,6 +2283,7 @@ namespace Cpp {
         Policy.FullyQualifiedName = true;
         Policy.SuppressScope = false;
         Policy.SuppressUnwrittenScope = false;
+        Policy.PrintCanonicalTypes = false;  // Keep sugar to preserve typedefs
       }
 
       std::string getFullyQualifiedType(QualType QT) {
@@ -2327,12 +2328,54 @@ namespace Cpp {
             }
             return base;
           }
-          return getFullyQualifiedName(RT->getOriginalDecl());
+          return getFullyQualifiedName(RT->getDecl());
         }
 
         case clang::Type::Typedef: {
           auto* TT = cast<TypedefType>(T);
+          // Check if the typedef is hiding a template specialization
+          QualType Underlying = TT->getDecl()->getUnderlyingType();
+          if (Underlying->getAs<TemplateSpecializationType>() ||
+              (Underlying->getAs<RecordType>() && 
+              isa<ClassTemplateSpecializationDecl>(
+                  Underlying->getAs<RecordType>()->getDecl()))) {
+            // Process the underlying type to get full qualification
+            return printTypeRecursively(Underlying);
+          }
           return getFullyQualifiedName(TT->getDecl());
+        }
+
+        case clang::Type::Elaborated: {
+          auto* ET = cast<ElaboratedType>(T);
+          // Process the named type with full qualification
+          return printTypeRecursively(ET->getNamedType());
+        }
+
+        case clang::Type::DependentName: {
+          auto* DNT = cast<DependentNameType>(T);
+          std::string result;
+          if (DNT->getQualifier()) {
+            llvm::raw_string_ostream OS(result);
+            DNT->getQualifier()->print(OS, Policy);
+            result += "::";
+          }
+          result += DNT->getIdentifier()->getName().str();
+          return result;
+        }
+
+        case clang::Type::Pointer: {
+          auto* PT = cast<PointerType>(T);
+          return printTypeRecursively(PT->getPointeeType()) + " *";
+        }
+
+        case clang::Type::LValueReference: {
+          auto* RT = cast<LValueReferenceType>(T);
+          return printTypeRecursively(RT->getPointeeType()) + " &";
+        }
+
+        case clang::Type::RValueReference: {
+          auto* RT = cast<RValueReferenceType>(T);
+          return printTypeRecursively(RT->getPointeeType()) + " &&";
         }
 
         default: {
@@ -2346,8 +2389,23 @@ namespace Cpp {
       }
 
       std::string printClassTemplateSpecialization(const ClassTemplateSpecializationDecl* CTSD) {
-        std::string templateName = getFullyQualifiedName(CTSD->getSpecializedTemplate());
+        std::string templateName = getFullyQualifiedName(CTSD);
+        
+        // If the specialization has template args, process them
+        if (CTSD->getTypeAsWritten()) {
+          // Use the type-as-written if available for better fidelity
+          if (auto TST = CTSD->getTypeAsWritten()->getType()->getAs<TemplateSpecializationType>()) {
+            return printTemplateSpecialization(TST);
+          }
+        }
+        
+        // Otherwise construct from the template args
         const TemplateArgumentList& ArgList = CTSD->getTemplateArgs();
+        
+        // Get the base name without template args
+        if (auto* CTD = CTSD->getSpecializedTemplate()) {
+          templateName = getFullyQualifiedName(CTD->getTemplatedDecl());
+        }
 
         std::string args = "<";
         for (unsigned i = 0; i < ArgList.size(); ++i) {
@@ -2368,6 +2426,8 @@ namespace Cpp {
           // qualified name — that gives the proper namespace qualification.
           if (auto *CTD = dyn_cast<ClassTemplateDecl>(TD)) {
             templateName = getFullyQualifiedName(CTD->getTemplatedDecl());
+          } else if (auto* TATD = dyn_cast<TypeAliasTemplateDecl>(TD)) {
+            templateName = getFullyQualifiedName(TATD);
           } else {
             // fallback for other template decl kinds
             templateName = getFullyQualifiedName(TD);
@@ -2407,6 +2467,40 @@ namespace Cpp {
         case TemplateArgument::Expression:
           return printExpressionFullyQualified(Arg.getAsExpr());
 
+        case TemplateArgument::Template: {
+          std::string result;
+          if (auto* TD = Arg.getAsTemplate().getAsTemplateDecl()) {
+            result = getFullyQualifiedName(TD);
+          } else {
+            llvm::raw_string_ostream OS(result);
+            Arg.getAsTemplate().print(OS, Policy);
+          }
+          return result;
+        }
+
+        case TemplateArgument::TemplateExpansion: {
+          std::string result;
+          if (auto* TD = Arg.getAsTemplateOrTemplatePattern().getAsTemplateDecl()) {
+            result = getFullyQualifiedName(TD) + "...";
+          } else {
+            llvm::raw_string_ostream OS(result);
+            Arg.getAsTemplateOrTemplatePattern().print(OS, Policy);
+            result += "...";
+          }
+          return result;
+        }
+
+        case TemplateArgument::Pack: {
+          std::string result;
+          bool first = true;
+          for (auto PackArg : Arg.pack_elements()) {
+            if (!first) result += ", ";
+            first = false;
+            result += printTemplateArgument(PackArg);
+          }
+          return result;
+        }
+
         default: {
           std::string result;
           PrintingPolicy localPolicy = Policy;
@@ -2437,6 +2531,40 @@ namespace Cpp {
 
         case TemplateArgument::Expression:
           return printExpressionFullyQualified(Arg.getAsExpr());
+
+        case TemplateArgument::Template: {
+          std::string result;
+          if (auto* TD = Arg.getAsTemplate().getAsTemplateDecl()) {
+            result = getFullyQualifiedName(TD);
+          } else {
+            llvm::raw_string_ostream OS(result);
+            Arg.getAsTemplate().print(OS, Policy);
+          }
+          return result;
+        }
+
+        case TemplateArgument::TemplateExpansion: {
+          std::string result;
+          if (auto* TD = Arg.getAsTemplateOrTemplatePattern().getAsTemplateDecl()) {
+            result = getFullyQualifiedName(TD) + "...";
+          } else {
+            llvm::raw_string_ostream OS(result);
+            Arg.getAsTemplateOrTemplatePattern().print(OS, Policy);
+            result += "...";
+          }
+          return result;
+        }
+
+        case TemplateArgument::Pack: {
+          std::string result;
+          bool first = true;
+          for (auto PackArg : Arg.pack_elements()) {
+            if (!first) result += ", ";
+            first = false;
+            result += printTemplateArgument(PackArg, TST);
+          }
+          return result;
+        }
 
         default: {
           std::string result;
@@ -2519,6 +2647,14 @@ namespace Cpp {
         if (!ND)
           return "";
 
+        // Special handling for ClassTemplateSpecializationDecl to avoid recursion
+        if (auto* CTSD = dyn_cast<ClassTemplateSpecializationDecl>(ND)) {
+          // Just get the base name without template arguments
+          if (auto* CTD = CTSD->getSpecializedTemplate()) {
+            return getFullyQualifiedName(CTD->getTemplatedDecl());
+          }
+        }
+
         std::string result;
         llvm::raw_string_ostream OS(result);
         ND->printQualifiedName(OS, Policy);
@@ -2575,6 +2711,17 @@ namespace Cpp {
             return printExpressionFullyQualified(E);
           }
           return printIntegralTemplateArgument(Arg);
+        }
+
+        case TemplateArgument::Template: {
+          std::string result;
+          if (auto* TD = Arg.getAsTemplate().getAsTemplateDecl()) {
+            result = getFullyQualifiedName(TD);
+          } else {
+            llvm::raw_string_ostream OS(result);
+            Arg.getAsTemplate().print(OS, Policy);
+          }
+          return result;
         }
 
         default: {
