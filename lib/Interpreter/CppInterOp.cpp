@@ -4824,7 +4824,7 @@ namespace Cpp {
 
     // This will instantiate tape<T> type and return it.
     SourceLocation noLoc;
-    QualType TT = S.CheckTemplateIdType(ElaboratedTypeKeyword::None, TemplateName(TemplateD), noLoc, TLI);
+    QualType TT = S.CheckTemplateIdType(ElaboratedTypeKeyword::None, TemplateName(TemplateD), noLoc, TLI, nullptr, false);
 
     // Perhaps we can extract this into a new interface.
     S.RequireCompleteType(fakeLoc, TT, diag::err_tentative_def_incomplete_type);
