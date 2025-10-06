@@ -15,6 +15,7 @@
 #include <set>
 #include <string>
 #include <vector>
+#include <map>
 #include <optional>
 
 // The cross-platform CPPINTEROP_API macro definition
@@ -704,6 +705,7 @@ namespace Cpp {
   CPPINTEROP_API TInterp_t
   CreateInterpreter(const std::vector<const char*>& Args = {},
                     const std::vector<const char*>& GpuArgs = {},
+                    const std::map<char const*, std::string_view>& VFS = {},
                     const std::optional<int> &CM = std::nullopt);
 
   /// Checks which Interpreter backend was CppInterOp library built with (Cling,
