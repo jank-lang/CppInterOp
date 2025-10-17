@@ -2353,7 +2353,12 @@ namespace Cpp {
         for (unsigned i = 0; i < ArgList.size(); ++i) {
           if (i > 0)
             args += ", ";
-          args += printTemplateArgument(ArgList[i]);
+          std::string arg = printTemplateArgument(ArgList[i]);
+          if(arg[0] == '<') {
+            arg.erase(0, 1);
+            arg.erase(arg.size() - 1, 1);
+          }
+          args += arg;
         }
         args += ">";
 
@@ -2376,7 +2381,12 @@ namespace Cpp {
         for (unsigned i = 0; i < Args.size(); ++i) {
           if (i > 0)
             args += ", ";
-          args += printTemplateArgument(Args[i], TST);
+          std::string arg = printTemplateArgument(Args[i], TST);
+          if(arg[0] == '<') {
+            arg.erase(0, 1);
+            arg.erase(arg.size() - 1, 1);
+          }
+          args += arg;
         }
         args += ">";
 
@@ -2530,7 +2540,12 @@ namespace Cpp {
             args += ", ";
 
           TemplateArgumentLoc ArgLoc = TSTL.getArgLoc(i);
-          args += printTemplateArgumentFromLoc(ArgLoc);
+          std::string arg = printTemplateArgumentFromLoc(ArgLoc);
+          if(arg[0] == '<') {
+            arg.erase(0, 1);
+            arg.erase(arg.size() - 1, 1);
+          }
+          args += arg;
         }
         args += ">";
 
