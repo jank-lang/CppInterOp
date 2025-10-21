@@ -192,6 +192,18 @@ namespace Cpp {
     return demangle;
   }
 
+  std::string MangleRTTI(TCppType_t type) {
+    QualType QT = QualType::getFromOpaquePtr(type);
+    std::unique_ptr<clang::MangleContext> mc(getASTContext().createMangleContext());
+
+    llvm::SmallString<128> buffer;
+    llvm::raw_svector_ostream out(buffer);
+
+    mc->mangleCXXRTTI(QT, out);
+
+    return out.str().str();
+  }
+
   void EnableDebugOutput(bool value/* =true*/) {
     llvm::DebugFlag = value;
   }
