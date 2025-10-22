@@ -4193,6 +4193,53 @@ namespace Cpp {
       return 1;
     }
 
+    int get_rtti_wrapper_code(compat::Interpreter& I, const QualType& T,
+                              const std::string &rtti_sym,
+                              std::string const &wrapper_name, std::string& wrapper) {
+      ASTContext& Context = getSema().getASTContext();
+      PrintingPolicy Policy(Context.getPrintingPolicy());
+      LLVM_DEBUG(dbgs() << "Wrapper name (rtti): " << wrapper_name << "\n");
+      //
+      //  Write the wrapper code.
+      // FIXME: this should be synthesized into the AST!
+      //
+      int indent_level = 0;
+      std::ostringstream buf;
+      std::ostringstream exprbuf;
+      ASTContext& C = getSema().getASTContext();
+
+      buf << "extern \"C\" ";
+      buf << "__attribute__((used, visibility(\"default\")))\n";
+      buf << "auto const " << rtti_sym << "{ ";
+      QualType QT = T.getCanonicalType();
+      std::string type;
+      get_type_as_string(QT, type, Context, Context.getPrintingPolicy());
+      buf << "&typeid(" << type << ")";
+      buf << " };\n\n";
+
+      buf << "__attribute__((used)) "
+             "__attribute__((annotate(\"__cling__ptrcheck(off)\")))\n"
+             "extern \"C\" "
+             "[[gnu::always_inline]]\n"
+             "inline void ";
+      buf << wrapper_name;
+      buf << "(void*, int, void**, [[gnu::nonnull]] void* ret)\n"
+             "{\n";
+      ++indent_level;
+      indent(buf, indent_level);
+
+      // Make a code string that follows this pattern:
+      //
+      // new (ret) (auto){ &typeid(T) };
+
+      buf << "new (ret) (auto){ " << rtti_sym << " };\n";
+
+      indent(buf, --indent_level);
+      buf << "}\n";
+      wrapper = buf.str();
+      return 1;
+    }
+
     template <WrapperKind K = WrapperKind::Jit>
     auto make_wrapper(compat::Interpreter& I,
                       const FunctionDecl* FD,
@@ -4551,6 +4598,43 @@ namespace Cpp {
       return (Ret)wrapper;
     }
 
+    template <WrapperKind K>
+    auto make_rtti_wrapper(compat::Interpreter& I,
+                           const QualType& T, const std::string &rtti_sym,
+                           std::string const &wrapper_name) {
+      using Ret = std::conditional_t<K == WrapperKind::Jit, JitCall::GenericCall, AotCall*>;
+      static std::map<QualType, Ret> gWrapperStore;
+
+      auto R = gWrapperStore.find(T);
+      if (R != gWrapperStore.end())
+        return R->second;
+
+      std::string wrapper_code;
+
+      if (get_rtti_wrapper_code(I, T, rtti_sym, wrapper_name, wrapper_code) == 0)
+        return (Ret)nullptr;
+
+      //
+      //   Compile the wrapper code.
+      //
+      bool withAccessControl = true;
+      void *wrapper = compile_wrapper<K>(I, wrapper_name, wrapper_code,
+                                         withAccessControl);
+      if (wrapper) {
+        gWrapperStore.insert(std::make_pair(T, (Ret)wrapper));
+      } else {
+        llvm::errs() << "TClingCallFunc::make_wrapper"
+                     << ":"
+                     << "Failed to compile\n"
+                     << "==== SOURCE BEGIN ====\n"
+                     << wrapper_code << "\n"
+                     << "==== SOURCE END ====\n";
+      }
+      LLVM_DEBUG(dbgs() << "Compiled '" << (wrapper ? "" : "un")
+                 << "successfully:\n" << wrapper_code << "'\n");
+      return (Ret)wrapper;
+    }
+
     // FIXME: Sink in the code duplication from get_wrapper_code.
     static void PrepareTorWrapper(const Decl* D,
                                   std::string& class_name) {
@@ -4854,6 +4938,15 @@ namespace Cpp {
       // FIXME: else error we failed to compile the wrapper.
       return {};
 
+    }
+
+    AotCall MakeRTTICallable(TCppType_t type, const std::string &rtti_sym, const std::string &name) {
+      QualType T = QualType::getFromOpaquePtr(type);
+      if (auto Wrapper = make_rtti_wrapper<WrapperKind::Aot>(getInterp(), T, rtti_sym, name)) {
+        return *Wrapper;
+      }
+      // FIXME: else error we failed to compile the wrapper.
+      return {};
     }
 
   namespace {

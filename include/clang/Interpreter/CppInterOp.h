@@ -681,6 +681,8 @@ namespace Cpp {
 
   CPPINTEROP_API AotCall MakeApplyCallable(TCppType_t type, const std::vector<TCppType_t>& arg_types, const std::string &name);
 
+  CPPINTEROP_API AotCall MakeRTTICallable(TCppType_t type, const std::string &rtti_sym, const std::string &name);
+
   /// Checks if a function declared is of const type or not.
   CPPINTEROP_API bool IsConstMethod(TCppFunction_t method);
 
