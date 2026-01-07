@@ -2111,6 +2111,7 @@ namespace Cpp {
       PrintingPolicy Policy((LangOptions()));
       Policy.Bool = true; // Print bool instead of _Bool.
       Policy.SuppressTagKeyword = true; // Do not print `class std::string`.
+      Policy.FullyQualifiedName = true;
       return compat::FixTypeName(QT.getAsString(Policy));
   }
 
@@ -3854,7 +3855,7 @@ namespace Cpp {
         helper_buf << "()\n"
               "{\n";
         indent(helper_buf, ++indent_level);
-        helper_buf << "return requires { T{ std::declval<Args>()... }; };\n";
+        helper_buf << "return requires { T( std::declval<Args>()... ); };\n";
         indent(helper_buf, --indent_level);
         helper_buf << "}\n";
 
