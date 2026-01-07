@@ -2065,6 +2065,11 @@ namespace Cpp {
     return QT->isReferenceType();
   }
 
+  bool IsRvalueReferenceType(TCppType_t type) {
+    QualType QT = QualType::getFromOpaquePtr(type);
+    return QT->isRValueReferenceType();
+  }
+
   TCppType_t GetNonReferenceType(TCppType_t type) {
     if (!IsReferenceType(type))
       return type;

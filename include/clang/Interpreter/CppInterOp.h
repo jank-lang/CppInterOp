@@ -623,6 +623,9 @@ namespace Cpp {
   /// Checks if type is a reference
   CPPINTEROP_API bool IsReferenceType(TCppType_t type);
 
+  /// Checks if type is an rvalue reference
+  CPPINTEROP_API bool IsRvalueReferenceType(TCppType_t type);
+
   /// Get the type that the reference refers to
   CPPINTEROP_API TCppType_t GetNonReferenceType(TCppType_t type);
 
