@@ -291,6 +291,9 @@ namespace Cpp {
   /// Checks if it is possible to implicitly convert from one type to another.
   CPPINTEROP_API bool IsImplicitlyConvertible(TCppType_t from_type, TCppType_t to_type);
 
+  /// Checks if it is possible to C-style cast from one type to another.
+  CPPINTEROP_API bool IsCStyleConvertible(TCppType_t from_type, TCppType_t to_type);
+
   /// Checks if it is possible to construct one type from another.
   CPPINTEROP_API bool IsConstructible(TCppType_t to_type, TCppType_t from_type);
 

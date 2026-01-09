@@ -408,9 +408,50 @@ namespace Cpp {
     QualType ToTy = QualType::getFromOpaquePtr(to_type);
     auto &Sema = getSema();
     auto &C = Sema.getASTContext();
-    Expr *DummyExpr = new (C) clang::OpaqueValueExpr(clang::SourceLocation(), FromTy.getNonReferenceType(), clang::ExprValueKind::VK_PRValue);;
-    ImplicitConversionSequence ICS = Sema.TryImplicitConversion(DummyExpr, ToTy, false, clang::Sema::AllowedExplicit::None, true, false, false);
+    Expr *DummyExpr = new (C) clang::OpaqueValueExpr(clang::SourceLocation(), FromTy.getNonReferenceType(), clang::ExprValueKind::VK_PRValue);
+    ImplicitConversionSequence ICS = Sema.TryImplicitConversion(DummyExpr, ToTy, false, clang::Sema::AllowedExplicit::All, true, false, false);
     return ICS.isStandard() || ICS.isUserDefined() || ICS.isEllipsis();
+  }
+
+  bool IsCStyleConvertible(TCppType_t from_type, TCppType_t to_type) {
+    QualType FromTy = QualType::getFromOpaquePtr(from_type).getNonReferenceType();
+    QualType ToTy = QualType::getFromOpaquePtr(to_type);
+    auto &Sema = getSema();
+    auto &C = Sema.getASTContext();
+
+    // Build a dummy expression of type FromTy.
+    // Use a null pointer literal or zero literal as appropriate, then
+    // force its type to FromTy with an implicit cast; this avoids
+    // needing a full expression tree for user code.
+    Expr *Dummy = nullptr;
+    if (FromTy->isPointerType() || FromTy->isMemberPointerType()) {
+      auto *Zero = IntegerLiteral::Create(
+          C, llvm::APInt(C.getIntWidth(C.IntTy), 0),
+          C.IntTy, SourceLocation());
+      Dummy = ImplicitCastExpr::Create(
+          C, FromTy, CK_NullToPointer, Zero, nullptr, VK_PRValue,
+          FPOptionsOverride());
+    } else if (FromTy->isIntegralOrEnumerationType()) {
+      auto *Zero = IntegerLiteral::Create(
+          C, llvm::APInt(C.getIntWidth(FromTy), 0),
+          FromTy, SourceLocation());
+      Dummy = Zero;
+    } else if (FromTy->isFunctionPointerType()) {
+      auto *Zero = IntegerLiteral::Create(
+          C, llvm::APInt(C.getIntWidth(C.IntTy), 0),
+          C.IntTy, SourceLocation());
+      Dummy = ImplicitCastExpr::Create(
+          C, FromTy, CK_NullToPointer, Zero, nullptr, VK_PRValue,
+          FPOptionsOverride());
+    } else {
+      // For other kinds of types, conservatively say no for now.
+      return false;
+    }
+
+    Sema::SFINAETrap trap(Sema, true);
+    auto TSI = C.getTrivialTypeSourceInfo(ToTy);
+    ExprResult CastRes = Sema.BuildCStyleCastExpr(SourceLocation(), TSI, SourceLocation(), Dummy);
+    return !CastRes.isInvalid();
   }
 
   bool IsConstructible(TCppType_t to_type, TCppType_t from_type) {
