@@ -334,6 +334,12 @@ namespace Cpp {
     return Ty->isVoidType();
   }
 
+  TCppType_t GetVoidType() {
+    auto &S = getSema();
+    ASTContext &Ctx = S.getASTContext();
+    return Ctx.VoidTy.getAsOpaquePtr();
+  }
+
   bool IsTemplate(TCppScope_t handle) {
     auto *D = (clang::Decl *)handle;
     return llvm::isa_and_nonnull<clang::TemplateDecl>(D);

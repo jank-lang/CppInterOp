@@ -272,6 +272,9 @@ namespace Cpp {
   /// Checks if it is a void type.
   CPPINTEROP_API bool IsVoid(TCppType_t type);
 
+  /// Returns the void type.
+  CPPINTEROP_API TCppType_t GetVoidType();
+
   /// Checks if it is a templated class.
   CPPINTEROP_API bool IsTemplate(TCppScope_t handle);
 
