@@ -217,6 +217,9 @@ namespace Cpp {
   ///\returns the demangled representation of the given mangled_name
   CPPINTEROP_API std::string Demangle(const std::string& mangled_name);
 
+  ///\returns the mangled RTTI representation of the given type
+  CPPINTEROP_API std::string MangleRTTI(TCppType_t type);
+
   /// Enables or disables the debugging printouts on stderr.
   /// Debugging output can be enabled also by the environment variable
   /// CPPINTEROP_EXTRA_INTERPRETER_ARGS. For example,
@@ -677,6 +680,8 @@ namespace Cpp {
   CPPINTEROP_API AotCall MakeBuiltinOperatorAotCallable(Operator op, TCppType_t type, const std::vector<TemplateArgInfo>& arg_types, const std::string &name);
 
   CPPINTEROP_API AotCall MakeApplyCallable(TCppType_t type, const std::vector<TCppType_t>& arg_types, const std::string &name);
+
+  CPPINTEROP_API AotCall MakeRTTICallable(TCppType_t type, const std::string &rtti_sym, const std::string &name);
 
   /// Checks if a function declared is of const type or not.
   CPPINTEROP_API bool IsConstMethod(TCppFunction_t method);
