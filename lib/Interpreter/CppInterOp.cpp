@@ -334,6 +334,12 @@ namespace Cpp {
     return Ty->isVoidType();
   }
 
+  TCppType_t GetVoidType() {
+    auto &S = getSema();
+    ASTContext &Ctx = S.getASTContext();
+    return Ctx.VoidTy.getAsOpaquePtr();
+  }
+
   bool IsTemplate(TCppScope_t handle) {
     auto *D = (clang::Decl *)handle;
     return llvm::isa_and_nonnull<clang::TemplateDecl>(D);
@@ -408,9 +414,50 @@ namespace Cpp {
     QualType ToTy = QualType::getFromOpaquePtr(to_type);
     auto &Sema = getSema();
     auto &C = Sema.getASTContext();
-    Expr *DummyExpr = new (C) clang::OpaqueValueExpr(clang::SourceLocation(), FromTy.getNonReferenceType(), clang::ExprValueKind::VK_PRValue);;
-    ImplicitConversionSequence ICS = Sema.TryImplicitConversion(DummyExpr, ToTy, false, clang::Sema::AllowedExplicit::None, true, false, false);
+    Expr *DummyExpr = new (C) clang::OpaqueValueExpr(clang::SourceLocation(), FromTy.getNonReferenceType(), clang::ExprValueKind::VK_PRValue);
+    ImplicitConversionSequence ICS = Sema.TryImplicitConversion(DummyExpr, ToTy, false, clang::Sema::AllowedExplicit::All, true, false, false);
     return ICS.isStandard() || ICS.isUserDefined() || ICS.isEllipsis();
+  }
+
+  bool IsCStyleConvertible(TCppType_t from_type, TCppType_t to_type) {
+    QualType FromTy = QualType::getFromOpaquePtr(from_type).getNonReferenceType();
+    QualType ToTy = QualType::getFromOpaquePtr(to_type);
+    auto &Sema = getSema();
+    auto &C = Sema.getASTContext();
+
+    // Build a dummy expression of type FromTy.
+    // Use a null pointer literal or zero literal as appropriate, then
+    // force its type to FromTy with an implicit cast; this avoids
+    // needing a full expression tree for user code.
+    Expr *Dummy = nullptr;
+    if (FromTy->isPointerType() || FromTy->isMemberPointerType()) {
+      auto *Zero = IntegerLiteral::Create(
+          C, llvm::APInt(C.getIntWidth(C.IntTy), 0),
+          C.IntTy, SourceLocation());
+      Dummy = ImplicitCastExpr::Create(
+          C, FromTy, CK_NullToPointer, Zero, nullptr, VK_PRValue,
+          FPOptionsOverride());
+    } else if (FromTy->isIntegralOrEnumerationType()) {
+      auto *Zero = IntegerLiteral::Create(
+          C, llvm::APInt(C.getIntWidth(FromTy), 0),
+          FromTy, SourceLocation());
+      Dummy = Zero;
+    } else if (FromTy->isFunctionPointerType()) {
+      auto *Zero = IntegerLiteral::Create(
+          C, llvm::APInt(C.getIntWidth(C.IntTy), 0),
+          C.IntTy, SourceLocation());
+      Dummy = ImplicitCastExpr::Create(
+          C, FromTy, CK_NullToPointer, Zero, nullptr, VK_PRValue,
+          FPOptionsOverride());
+    } else {
+      // For other kinds of types, conservatively say no for now.
+      return false;
+    }
+
+    Sema::SFINAETrap trap(Sema, true);
+    auto TSI = C.getTrivialTypeSourceInfo(ToTy);
+    ExprResult CastRes = Sema.BuildCStyleCastExpr(SourceLocation(), TSI, SourceLocation(), Dummy);
+    return !CastRes.isInvalid();
   }
 
   bool IsConstructible(TCppType_t to_type, TCppType_t from_type) {
@@ -1410,49 +1457,61 @@ namespace Cpp {
     }
 
     bool has_member_candidate{};
+
+    // Returns whether the function should be considered for other candidacy.
+    auto register_member = [&](CXXMethodDecl *MD, FunctionTemplateDecl *FTD) -> bool {
+      if (MD->isDeleted())
+        return false;
+      if (!MD->isStatic()) {
+        DeclAccessPair found = DeclAccessPair::make(MD, MD->getAccess());
+        TemplateArgumentListInfo ExplicitTemplateArgs{};
+
+        if (auto *CD = dyn_cast<CXXConstructorDecl>(MD)) {
+          if (FTD)
+            S.AddTemplateOverloadCandidate(FTD, found, &ExplicitTemplateArgs, non_member_args, candSet);
+          else
+            S.AddOverloadCandidate(CD, found, non_member_args, candSet);
+          return false;
+        }
+
+        if (arg_types.empty())
+          return true;
+
+        QualType OT = QualType::getFromOpaquePtr(arg_types[0].m_Type);
+        ExprValueKind ExprKind = ExprValueKind::VK_PRValue;
+        if (OT->isLValueReferenceType())
+          ExprKind = ExprValueKind::VK_LValue;
+        else if (OT->isRValueReferenceType())
+          ExprKind = ExprValueKind::VK_XValue;
+
+        OpaqueValueExpr Expr(SourceLocation::getFromRawEncoding(1), OT.getNonReferenceType(), ExprKind);
+        Expr::Classification objClass = Expr.Classify(C);
+
+        has_member_candidate = true;
+        if (FTD) {
+          S.AddMethodTemplateCandidate(FTD, found, MD->getParent(), &ExplicitTemplateArgs, OT.getNonReferenceType(), objClass, member_args, candSet);
+          return false;
+        } else {
+          S.AddMethodCandidate(found, OT.getNonReferenceType(), objClass, member_args, candSet);
+          return false;
+        }
+      }
+      return true;
+    };
+
     for (TCppScope_t F : candidates) {
       Decl *D = (Decl*)F;
 
       if (auto *MD = dyn_cast<CXXMethodDecl>(D)) {
-        if (MD->isDeleted())
+        if(!register_member(MD, dyn_cast<FunctionTemplateDecl>(MD)))
           continue;
-        if (!MD->isStatic()) {
-          DeclAccessPair found = DeclAccessPair::make(MD, MD->getAccess());
-          TemplateArgumentListInfo ExplicitTemplateArgs{};
-
-          if (auto *CD = dyn_cast<CXXConstructorDecl>(D)) {
-            if (auto *FTD = dyn_cast<FunctionTemplateDecl>(MD))
-              S.AddTemplateOverloadCandidate(FTD, found, &ExplicitTemplateArgs, non_member_args, candSet);
-            else
-              S.AddOverloadCandidate(CD, found, non_member_args, candSet);
-            continue;
-          }
-
-          if (arg_types.empty())
-            continue;
-
-          QualType OT = QualType::getFromOpaquePtr(arg_types[0].m_Type);
-          ExprValueKind ExprKind = ExprValueKind::VK_PRValue;
-          if (OT->isLValueReferenceType())
-            ExprKind = ExprValueKind::VK_LValue;
-          else if (OT->isRValueReferenceType())
-            ExprKind = ExprValueKind::VK_XValue;
-
-          OpaqueValueExpr Expr(SourceLocation::getFromRawEncoding(1), OT.getNonReferenceType(), ExprKind);
-          Expr::Classification objClass = Expr.Classify(C);
-
-          has_member_candidate = true;
-          if (auto *MTD = dyn_cast<FunctionTemplateDecl>(MD)) {
-            S.AddMethodTemplateCandidate(MTD, found, MD->getParent(), &ExplicitTemplateArgs, OT.getNonReferenceType(), objClass, member_args, candSet);
-            continue;
-          } else {
-            S.AddMethodCandidate(found, OT.getNonReferenceType(), objClass, member_args, candSet);
-            continue;
-          }
-        }
       }
 
       if (auto *FTD = dyn_cast<FunctionTemplateDecl>(D)) {
+        if (auto *MD = dyn_cast<CXXMethodDecl>(FTD->getTemplatedDecl())) {
+          if(!register_member(MD, FTD))
+            continue;
+        }
         TemplateArgumentListInfo ExplicitTemplateArgs{};
         S.AddTemplateOverloadCandidate(FTD, DeclAccessPair::make(FTD, FTD->getAccess()), &ExplicitTemplateArgs, non_member_args, candSet);
         continue;
@@ -2065,6 +2124,11 @@ namespace Cpp {
     return QT->isReferenceType();
   }
 
+  bool IsRvalueReferenceType(TCppType_t type) {
+    QualType QT = QualType::getFromOpaquePtr(type);
+    return QT->isRValueReferenceType();
+  }
+
   TCppType_t GetNonReferenceType(TCppType_t type) {
     if (!IsReferenceType(type))
       return type;
@@ -2111,6 +2175,7 @@ namespace Cpp {
       PrintingPolicy Policy((LangOptions()));
       Policy.Bool = true; // Print bool instead of _Bool.
       Policy.SuppressTagKeyword = true; // Do not print `class std::string`.
+      Policy.FullyQualifiedName = true;
       return compat::FixTypeName(QT.getAsString(Policy));
   }
 
@@ -3854,7 +3919,7 @@ namespace Cpp {
         helper_buf << "()\n"
               "{\n";
         indent(helper_buf, ++indent_level);
-        helper_buf << "return requires { T{ std::declval<Args>()... }; };\n";
+        helper_buf << "return requires { T( std::declval<Args>()... ); };\n";
         indent(helper_buf, --indent_level);
         helper_buf << "}\n";
 

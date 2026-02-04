@@ -272,6 +272,9 @@ namespace Cpp {
   /// Checks if it is a void type.
   CPPINTEROP_API bool IsVoid(TCppType_t type);
 
+  /// Returns the void type.
+  CPPINTEROP_API TCppType_t GetVoidType();
+
   /// Checks if it is a templated class.
   CPPINTEROP_API bool IsTemplate(TCppScope_t handle);
 
@@ -290,6 +293,9 @@ namespace Cpp {
 
   /// Checks if it is possible to implicitly convert from one type to another.
   CPPINTEROP_API bool IsImplicitlyConvertible(TCppType_t from_type, TCppType_t to_type);
+
+  /// Checks if it is possible to C-style cast from one type to another.
+  CPPINTEROP_API bool IsCStyleConvertible(TCppType_t from_type, TCppType_t to_type);
 
   /// Checks if it is possible to construct one type from another.
   CPPINTEROP_API bool IsConstructible(TCppType_t to_type, TCppType_t from_type);
@@ -622,6 +628,9 @@ namespace Cpp {
 
   /// Checks if type is a reference
   CPPINTEROP_API bool IsReferenceType(TCppType_t type);
+
+  /// Checks if type is an rvalue reference
+  CPPINTEROP_API bool IsRvalueReferenceType(TCppType_t type);
 
   /// Get the type that the reference refers to
   CPPINTEROP_API TCppType_t GetNonReferenceType(TCppType_t type);
