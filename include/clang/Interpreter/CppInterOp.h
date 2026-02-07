@@ -217,6 +217,9 @@ namespace Cpp {
   ///\returns the demangled representation of the given mangled_name
   CPPINTEROP_API std::string Demangle(const std::string& mangled_name);
 
+  ///\returns the mangled RTTI representation of the given type
+  CPPINTEROP_API std::string MangleRTTI(TCppType_t type);
+
   /// Enables or disables the debugging printouts on stderr.
   /// Debugging output can be enabled also by the environment variable
   /// CPPINTEROP_EXTRA_INTERPRETER_ARGS. For example,
@@ -269,6 +272,9 @@ namespace Cpp {
   /// Checks if it is a void type.
   CPPINTEROP_API bool IsVoid(TCppType_t type);
 
+  /// Returns the void type.
+  CPPINTEROP_API TCppType_t GetVoidType();
+
   /// Checks if it is a templated class.
   CPPINTEROP_API bool IsTemplate(TCppScope_t handle);
 
@@ -287,6 +293,9 @@ namespace Cpp {
 
   /// Checks if it is possible to implicitly convert from one type to another.
   CPPINTEROP_API bool IsImplicitlyConvertible(TCppType_t from_type, TCppType_t to_type);
+
+  /// Checks if it is possible to C-style cast from one type to another.
+  CPPINTEROP_API bool IsCStyleConvertible(TCppType_t from_type, TCppType_t to_type);
 
   /// Checks if it is possible to construct one type from another.
   CPPINTEROP_API bool IsConstructible(TCppType_t to_type, TCppType_t from_type);
@@ -620,6 +629,9 @@ namespace Cpp {
   /// Checks if type is a reference
   CPPINTEROP_API bool IsReferenceType(TCppType_t type);
 
+  /// Checks if type is an rvalue reference
+  CPPINTEROP_API bool IsRvalueReferenceType(TCppType_t type);
+
   /// Get the type that the reference refers to
   CPPINTEROP_API TCppType_t GetNonReferenceType(TCppType_t type);
 
@@ -677,6 +689,8 @@ namespace Cpp {
   CPPINTEROP_API AotCall MakeBuiltinOperatorAotCallable(Operator op, TCppType_t type, const std::vector<TemplateArgInfo>& arg_types, const std::string &name);
 
   CPPINTEROP_API AotCall MakeApplyCallable(TCppType_t type, const std::vector<TCppType_t>& arg_types, const std::string &name);
+
+  CPPINTEROP_API AotCall MakeRTTICallable(TCppType_t type, const std::string &rtti_sym, const std::string &name);
 
   /// Checks if a function declared is of const type or not.
   CPPINTEROP_API bool IsConstMethod(TCppFunction_t method);
