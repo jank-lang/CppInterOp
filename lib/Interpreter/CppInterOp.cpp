@@ -3738,17 +3738,22 @@ namespace Cpp {
           QT = C.getArrayDecayedType(QT);
         }
         bool R = QT->isReferenceType();
-        /* A Clang bug prevents this from working.
-         * https://github.com/llvm/llvm-project/issues/146956
-         */
+        
+        // For static const integral member variables, if they lack an out-of-line definition,
+        // taking their address will cause a JIT linker error (ODR violation).
+        // In this specific case, we fall back to returning the value instead of the pointer.
         bool Static = VD->isStaticDataMember();
-        if((R || !P) && !A && !Static) {
+        bool MissingDef = !VD->hasDefinition();
+        bool ConstUsable = VD->isUsableInConstantExpressions(C);
+        bool MissingConstDef = Static && MissingDef && ConstUsable;
+        
+        if((R || !P) && !A && !MissingConstDef) {
           QT = C.getPointerType(QT.getNonReferenceType());
         }
         std::string type;
         get_type_as_string(QT, type, C, C.getPrintingPolicy());
         buf << "(" << type << ")(";
-        if(!P && !A && !Static) {
+        if(!P && !A && !MissingConstDef) {
           buf << "&";
         }
       }
@@ -4902,6 +4907,7 @@ namespace Cpp {
         // FIXME: else error we failed to compile the wrapper.
         return {};
       }
+      return {};
     }
 
     CPPINTEROP_API AotCall MakeBuiltinConstructorAotCallable(TCppType_t type, const std::string &name) {
