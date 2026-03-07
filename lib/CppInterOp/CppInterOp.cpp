@@ -4165,7 +4165,7 @@ int get_aggregate_ctor_predicate_wrapper_code(compat::Interpreter& I,
     helper_buf << "()\n"
                   "{\n";
     indent(helper_buf, ++indent_level);
-    helper_buf << "return requires { T( std::declval<Args>()... ); };\n";
+    helper_buf << "return requires { T{ std::declval<Args>()... }; };\n";
     indent(helper_buf, --indent_level);
     helper_buf << "}\n";
 
