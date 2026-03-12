@@ -448,9 +448,14 @@ bool IsIntegral(TCppType_t type) {
   return Ty->isIntegralType(getSema().getASTContext());
 }
 
+bool IsFloatingPoint(TCppType_t type) {
+  QualType Ty = QualType::getFromOpaquePtr(type);
+  return Ty->isFloatingType();
+}
+
 bool IsVoid(TCppType_t type) {
   QualType Ty = QualType::getFromOpaquePtr(type);
-  return Ty->isVoidType();
+  return Ty->getUnqualifiedDesugaredType()->isVoidType();
 }
 
 TCppType_t GetVoidType() {
@@ -2662,6 +2667,134 @@ TCppType_t GetUnsignedType(TCppType_t type) {
   UnsignedQT = C.getQualifiedType(UnsignedQT, QT.getQualifiers());
 
   return UnsignedQT.getAsOpaquePtr();
+}
+
+TCppType_t GetShortType(TCppType_t type) {
+  QualType QT = QualType::getFromOpaquePtr(type);
+
+  const BuiltinType* BT = QT->getAs<BuiltinType>();
+  if (!BT)
+    return QT.getAsOpaquePtr();
+
+  ASTContext& C = getSema().getASTContext();
+
+  QualType ShortQT;
+  switch (BT->getKind()) {
+    case BuiltinType::Short:
+    case BuiltinType::UShort:
+      return QT.getAsOpaquePtr();
+
+    case BuiltinType::Int:
+    case BuiltinType::Long:
+    case BuiltinType::LongLong:
+    case BuiltinType::Int128:
+    case BuiltinType::SChar:
+      ShortQT = C.ShortTy;
+      break;
+
+    case BuiltinType::UInt:
+    case BuiltinType::ULong:
+    case BuiltinType::ULongLong:
+    case BuiltinType::UInt128:
+    case BuiltinType::UChar:
+    case BuiltinType::Char_U:
+      ShortQT = C.UnsignedShortTy;
+      break;
+
+    case BuiltinType::Char_S:
+    case BuiltinType::WChar_S:
+      ShortQT = C.ShortTy;
+      break;
+
+    case BuiltinType::WChar_U:
+      ShortQT = C.UnsignedShortTy;
+      break;
+
+    default:
+      return QT.getAsOpaquePtr();
+  }
+
+  ShortQT = C.getQualifiedType(ShortQT, QT.getQualifiers());
+  return ShortQT.getAsOpaquePtr();
+}
+
+TCppType_t GetLongType(TCppType_t type) {
+  QualType QT = QualType::getFromOpaquePtr(type);
+
+  const BuiltinType* BT = QT->getAs<BuiltinType>();
+  if (!BT)
+    return QT.getAsOpaquePtr();
+
+  ASTContext& C = getSema().getASTContext();
+
+  QualType LongQT;
+  switch (BT->getKind()) {
+    case BuiltinType::Long:
+    case BuiltinType::ULong:
+      return QT.getAsOpaquePtr();
+
+    case BuiltinType::SChar:
+    case BuiltinType::Short:
+    case BuiltinType::Int:
+    case BuiltinType::LongLong:
+    case BuiltinType::Int128:
+    case BuiltinType::Char_S:
+    case BuiltinType::WChar_S:
+      LongQT = C.LongTy;
+      break;
+
+    case BuiltinType::UChar:
+    case BuiltinType::Char_U:
+    case BuiltinType::UShort:
+    case BuiltinType::UInt:
+    case BuiltinType::ULongLong:
+    case BuiltinType::UInt128:
+    case BuiltinType::WChar_U:
+      LongQT = C.UnsignedLongTy;
+      break;
+
+    case BuiltinType::Double:
+      LongQT = C.LongDoubleTy;
+      break;
+
+    default:
+      return QT.getAsOpaquePtr();
+  }
+
+  LongQT = C.getQualifiedType(LongQT, QT.getQualifiers());
+  return LongQT.getAsOpaquePtr();
+}
+
+bool IsShortType(TCppType_t type) {
+  QualType QT = QualType::getFromOpaquePtr(type);
+
+  const BuiltinType* BT = QT->getAs<BuiltinType>();
+  if (!BT)
+    return QT.getAsOpaquePtr();
+
+  switch (BT->getKind()) {
+    case BuiltinType::Short:
+    case BuiltinType::UShort:
+      return true;
+    default:
+      return false;
+  }
+}
+
+bool IsLongType(TCppType_t type) {
+  QualType QT = QualType::getFromOpaquePtr(type);
+
+  const BuiltinType* BT = QT->getAs<BuiltinType>();
+  if (!BT)
+    return QT.getAsOpaquePtr();
+
+  switch (BT->getKind()) {
+    case BuiltinType::Long:
+    case BuiltinType::ULong:
+      return true;
+    default:
+      return false;
+  }
 }
 
 std::string GetTypeAsString(TCppType_t var) {
