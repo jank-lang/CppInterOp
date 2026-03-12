@@ -343,6 +343,8 @@ CPPINTEROP_API bool IsBuiltin(TCppType_t type);
 
 CPPINTEROP_API bool IsIntegral(TCppType_t type);
 
+CPPINTEROP_API bool IsFloatingPoint(TCppType_t type);
+
 /// Checks if it is a void type.
 CPPINTEROP_API bool IsVoid(TCppType_t type);
 
@@ -790,6 +792,14 @@ CPPINTEROP_API TCppType_t GetTypeWithVolatile(TCppType_t type);
 CPPINTEROP_API TCppType_t GetSignedType(TCppType_t type);
 
 CPPINTEROP_API TCppType_t GetUnsignedType(TCppType_t type);
+
+CPPINTEROP_API TCppType_t GetShortType(TCppType_t type);
+
+CPPINTEROP_API TCppType_t GetLongType(TCppType_t type);
+
+CPPINTEROP_API bool IsShortType(TCppType_t type);
+
+CPPINTEROP_API bool IsLongType(TCppType_t type);
 
 /// Gets the Type (passed as a parameter) as a String value.
 CPPINTEROP_API std::string GetTypeAsString(TCppType_t type);
