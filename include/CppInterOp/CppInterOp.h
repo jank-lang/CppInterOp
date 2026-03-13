@@ -737,6 +737,10 @@ GetFunctionTypeFromPointerToMember(TCppType_t member_type, TCppType_t obj_type);
 /// Checks if type is an array
 CPPINTEROP_API bool IsArrayType(TCppType_t type);
 
+CPPINTEROP_API bool IsSizedArrayType(TCppType_t type);
+
+CPPINTEROP_API size_t GetArraySize(TCppType_t type);
+
 /// Get the element type of an array
 CPPINTEROP_API TCppType_t GetArrayElementType(TCppType_t type);
 

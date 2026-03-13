@@ -2377,6 +2377,20 @@ bool IsArrayType(TCppType_t type) {
   return QT->isArrayType();
 }
 
+bool IsSizedArrayType(TCppType_t type) {
+  QualType QT = QualType::getFromOpaquePtr(type);
+  return QT->isConstantArrayType();
+}
+
+size_t GetArraySize(TCppType_t type) {
+  QualType QT = QualType::getFromOpaquePtr(type);
+  ASTContext& Ctx = getASTContext();
+  if (auto* CAT = Ctx.getAsConstantArrayType(QT)) {
+    return CAT->getLimitedSize();
+  }
+  return 0;
+}
+
 TCppType_t GetArrayElementType(TCppType_t type) {
   QualType QT = QualType::getFromOpaquePtr(type);
   ASTContext& Ctx = getASTContext();
