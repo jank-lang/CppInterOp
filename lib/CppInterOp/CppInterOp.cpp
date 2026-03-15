@@ -6461,8 +6461,13 @@ TCppObject_t Allocate(TCppScope_t scope, TCppIndex_t count) {
 }
 
 void Deallocate(TCppScope_t scope, TCppObject_t address, TCppIndex_t count) {
+#if defined(__MINGW64__)
+  (void)scope; (void)count;
+  ::operator delete(address);
+#else
   size_t bytes = Cpp::SizeOf(scope) * count;
   ::operator delete(address, bytes);
+#endif
 }
 
 // FIXME: Add optional arguments to the operator new.
