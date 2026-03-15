@@ -24,7 +24,7 @@ class HeaderSearchOptions;
 class FileManager;
 } // namespace clang
 
-namespace Cpp {
+namespace CppInternal {
 namespace utils {
 
 namespace platform {
@@ -60,30 +60,30 @@ void DLClose(void* Lib, std::string* Err = nullptr);
 } // namespace platform
 
 enum SplitMode {
-  kPruneNonExistant, ///< Don't add non-existant paths into output
-  kFailNonExistant,  ///< Fail on any non-existant paths
-  kAllowNonExistant  ///< Add all paths whether they exist or not
+  kPruneNonExistent, ///< Don't add non-existent paths into output
+  kFailNonExistent,  ///< Fail on any non-existent paths
+  kAllowNonExistent  ///< Add all paths whether they exist or not
 };
 
-///\brief Collect the constituant paths from a PATH string.
+///\brief Collect the constituent paths from a PATH string.
 /// /bin:/usr/bin:/usr/local/bin -> {/bin, /usr/bin, /usr/local/bin}
 ///
 /// All paths returned existed at the time of the call
 /// \param [in] PathStr - The PATH string to be split
 /// \param [out] Paths - All the paths in the string that exist
 /// \param [in] Mode - If any path doesn't exist stop and return false
-/// \param [in] Delim - The delimeter to use
+/// \param [in] Delim - The delimiter to use
 /// \param [in] Verbose - Whether to print out details as 'clang -v' would
 ///
 /// \return true if all paths existed, otherwise false
 ///
 bool SplitPaths(llvm::StringRef PathStr,
                 llvm::SmallVectorImpl<llvm::StringRef>& Paths,
-                SplitMode Mode = kPruneNonExistant,
-                llvm::StringRef Delim = Cpp::utils::platform::kEnvDelim,
+                SplitMode Mode = kPruneNonExistent,
+                llvm::StringRef Delim = CppInternal::utils::platform::kEnvDelim,
                 bool Verbose = false);
 
-///\brief Adds multiple include paths separated by a delimter into the
+///\brief Adds multiple include paths separated by a delimiter into the
 /// given HeaderSearchOptions.  This adds the paths but does no further
 /// processing. See Interpreter::AddIncludePaths or CIFactory::createCI
 /// for examples of what needs to be done once the paths have been added.
@@ -92,13 +92,14 @@ bool SplitPaths(llvm::StringRef PathStr,
 ///\param[in] Opts - HeaderSearchOptions to add paths into
 ///\param[in] Delim - Delimiter to separate paths or NULL if a single path
 ///
-void AddIncludePaths(llvm::StringRef PathStr, clang::HeaderSearchOptions& HOpts,
-                     const char* Delim = Cpp::utils::platform::kEnvDelim);
+void AddIncludePaths(
+    llvm::StringRef PathStr, clang::HeaderSearchOptions& HOpts,
+    const char* Delim = CppInternal::utils::platform::kEnvDelim);
 
 ///\brief Write to cling::errs that directory does not exist in a format
 /// matching what 'clang -v' would do
 ///
-void LogNonExistantDirectory(llvm::StringRef Path);
+void LogNonExistentDirectory(llvm::StringRef Path);
 
 ///\brief Copies the current include paths into the HeaderSearchOptions.
 ///
@@ -117,6 +118,6 @@ void CopyIncludePaths(const clang::HeaderSearchOptions& Opts,
                       bool WithSystem, bool WithFlags);
 
 } // namespace utils
-} // namespace Cpp
+} // namespace CppInternal
 
 #endif // CPPINTEROP_UTILS_PATHS_H

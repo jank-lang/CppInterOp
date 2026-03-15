@@ -1,5 +1,7 @@
 #if 0
 #include "clang-c/CXCppInterOp.h"
+#include "CppInterOp/CppInterOp.h"
+
 #include "Compatibility.h"
 #include "clang/AST/CXXInheritance.h"
 #include "clang/AST/Decl.h"
@@ -8,7 +10,6 @@
 #include "clang/AST/RecordLayout.h"
 #include "clang/AST/Type.h"
 #include "clang/Frontend/CompilerInstance.h"
-#include "clang/Interpreter/CppInterOp.h"
 #include "clang/Sema/Lookup.h"
 #include "clang/Sema/Sema.h"
 #include "llvm/ADT/STLExtras.h"
@@ -90,7 +91,6 @@ CXCursorKind cxcursor_getCursorKindForDecl(const Decl* D) {
   default:
     if (const auto* TD = dyn_cast<TagDecl>(D)) {
       switch (TD->getTagKind()) {
-#if CLANG_VERSION_MAJOR >= 18
       case TagTypeKind::Interface: // fall through
       case TagTypeKind::Struct:
         return CXCursor_StructDecl;
@@ -100,17 +100,6 @@ CXCursorKind cxcursor_getCursorKindForDecl(const Decl* D) {
         return CXCursor_UnionDecl;
       case TagTypeKind::Enum:
         return CXCursor_EnumDecl;
-#else
-      case TagTypeKind::TTK_Interface: // fall through
-      case TagTypeKind::TTK_Struct:
-        return CXCursor_StructDecl;
-      case TagTypeKind::TTK_Class:
-        return CXCursor_ClassDecl;
-      case TagTypeKind::TTK_Union:
-        return CXCursor_UnionDecl;
-      case TagTypeKind::TTK_Enum:
-        return CXCursor_EnumDecl;
-#endif
       }
     }
   }
@@ -199,9 +188,7 @@ CXTypeKind cxtype_GetTypeKind(QualType T) {
     TKCASE(Auto);
     TKCASE(Pipe);
     TKCASE(Attributed);
-#if CLANG_VERSION_MAJOR >= 16
     TKCASE(BTFTagAttributed);
-#endif
     TKCASE(Atomic);
   default:
     return CXType_Unexposed;
@@ -271,8 +258,15 @@ static inline compat::Interpreter* getInterpreter(const CXInterpreterImpl* I) {
 }
 
 CXInterpreter clang_createInterpreter(const char* const* argv, int argc) {
-  auto* I = new CXInterpreterImpl(); // NOLINT(*-owning-memory)
+  auto I = std::make_unique<CXInterpreterImpl>();
+#ifdef CPPINTEROP_USE_CLING
   I->Interp = std::make_unique<compat::Interpreter>(argc, argv);
+#else
+  I->Interp = compat::Interpreter::create(argc, argv);
+  if (!I->Interp) {
+    return nullptr;
+  }
+#endif
   // create a bridge between CXTranslationUnit and clang::Interpreter
   // auto AU = std::make_unique<ASTUnit>(false);
   // AU->FileMgr = I->Interp->getCompilerInstance().getFileManager();
@@ -281,7 +275,7 @@ CXInterpreter clang_createInterpreter(const char* const* argv, int argc) {
   // AU->Ctx = &I->Interp->getSema().getASTContext();
   // I->TU.reset(MakeCXTranslationUnit(static_cast<CIndexer*>(clang_createIndex(0,
   // 0)), AU));
-  return I;
+  return I.release();
 }
 
 CXInterpreter clang_createInterpreterFromRawPtr(TInterp_t I) {
@@ -329,9 +323,9 @@ void clang_Interpreter_addIncludePath(CXInterpreter I, const char* dir) {
   getInterpreter(I)->AddIncludePath(dir);
 }
 
-namespace Cpp {
+namespace CppImpl {
 int Declare(compat::Interpreter& interp, const char* code, bool silent);
-} // namespace Cpp
+} // namespace CppImpl
 
 enum CXErrorCode clang_Interpreter_declare(CXInterpreter I, const char* code,
                                            bool silent) {
@@ -412,11 +406,11 @@ CXString clang_Interpreter_searchLibrariesForSymbol(CXInterpreter I,
           mangled_name, search_system));
 }
 
-namespace Cpp {
+namespace CppImpl {
 bool InsertOrReplaceJitSymbol(compat::Interpreter& I,
                               const char* linker_mangled_name,
                               uint64_t address);
-} // namespace Cpp
+} // namespace CppImpl
 
 bool clang_Interpreter_insertOrReplaceJitSymbol(CXInterpreter I,
                                                 const char* linker_mangled_name,
@@ -443,7 +437,7 @@ CXString clang_getTypeAsString(CXQualType type) {
   clang::PrintingPolicy Policy = C.getPrintingPolicy();
   Policy.Bool = true;               // Print bool instead of _Bool.
   Policy.SuppressTagKeyword = true; // Do not print `class std::string`.
-  return makeCXString(compat::FixTypeName(QT.getAsString(Policy)));
+  return makeCXString(QT.getAsString(Policy));
 }
 
 CXQualType clang_getComplexType(CXQualType eltype) {
@@ -525,6 +519,15 @@ CXString clang_getFunctionSignature(CXScope func) {
   return makeCXString("");
 }
 
+CXString clang_getDoxygenComment(CXScope S, bool strip_comment_markers) {
+  if (isNull(S))
+    return makeCXString("");
+
+  auto* D = getDecl(S);
+  return makeCXString(Cpp::GetDoxygenComment(static_cast<Cpp::TCppScope_t>(D),
+                                             strip_comment_markers));
+}
+
 bool clang_isTemplatedFunction(CXScope func) {
   auto* D = getDecl(func);
   if (llvm::isa_and_nonnull<clang::FunctionTemplateDecl>(D))
@@ -549,7 +552,7 @@ bool clang_existsFunctionTemplate(const char* name, CXScope parent) {
   const auto* Within = llvm::dyn_cast<clang::DeclContext>(getDecl(parent));
 
   auto& S = getInterpreter(parent)->getSema();
-  auto* ND = Cpp::Cpp_utils::Lookup::Named(&S, name, Within);
+  auto* ND = CppInternal::utils::Lookup::Named(&S, name, Within);
 
   if (!ND)
     return false;
@@ -562,11 +565,12 @@ bool clang_existsFunctionTemplate(const char* name, CXScope parent) {
   return true;
 }
 
-namespace Cpp {
+namespace CppImpl {
 TCppScope_t InstantiateTemplate(compat::Interpreter& I, TCppScope_t tmpl,
                                 const TemplateArgInfo* template_args,
-                                size_t template_args_size);
-} // namespace Cpp
+                                size_t template_args_size,
+                                bool instantiate_body = false);
+} // namespace CppImpl
 
 CXScope clang_instantiateTemplate(CXScope tmpl,
                                   CXTemplateArgInfo* template_args,
@@ -589,14 +593,14 @@ CXObject clang_allocate(unsigned int n) { return ::operator new(n); }
 
 void clang_deallocate(CXObject address) { ::operator delete(address); }
 
-namespace Cpp {
+namespace CppImpl {
 void* Construct(compat::Interpreter& interp, TCppScope_t scope,
-                void* arena /*=nullptr*/);
-} // namespace Cpp
+                void* arena /*=nullptr*/, TCppIndex_t count);
+} // namespace CppImpl
 
-CXObject clang_construct(CXScope scope, void* arena) {
+CXObject clang_construct(CXScope scope, void* arena, size_t count) {
   return Cpp::Construct(*getInterpreter(scope),
-                        static_cast<void*>(getDecl(scope)), arena);
+                        static_cast<void*>(getDecl(scope)), arena, count);
 }
 
 void clang_invoke(CXScope func, void* result, void** args, size_t n,
@@ -605,12 +609,12 @@ void clang_invoke(CXScope func, void* result, void** args, size_t n,
       .Invoke(result, {args, n}, self);
 }
 
-namespace Cpp {
-void Destruct(compat::Interpreter& interp, TCppObject_t This,
-              clang::Decl* Class, bool withFree);
-} // namespace Cpp
+namespace CppImpl {
+bool Destruct(compat::Interpreter& interp, TCppObject_t This,
+              const clang::Decl* Class, bool withFree, size_t nary);
+} // namespace CppImpl
 
-void clang_destruct(CXObject This, CXScope S, bool withFree) {
-  Cpp::Destruct(*getInterpreter(S), This, getDecl(S), withFree);
+bool clang_destruct(CXObject This, CXScope S, bool withFree, size_t nary) {
+  return Cpp::Destruct(*getInterpreter(S), This, getDecl(S), withFree, nary);
 }
 #endif

@@ -17,7 +17,7 @@
 #include "llvm/Support/Debug.h"
 #include "llvm/Support/Path.h"
 
-namespace Cpp {
+namespace CppInternal {
 class Dyld;
 class InterpreterCallbacks;
 
@@ -190,7 +190,7 @@ public:
   /// Find the first not-yet-loaded shared object that contains the symbol
   ///
   ///\param[in] mangledName - the mangled name to look for.
-  ///\param[in] searchSystem - whether to decend into system libraries.
+  ///\param[in] searchSystem - whether to descend into system libraries.
   ///
   ///\returns the library name if found, and empty string otherwise.
   ///
@@ -219,6 +219,6 @@ public:
   static bool isSharedLibrary(llvm::StringRef libFullPath,
                               bool* exists = nullptr);
 };
-} // end namespace Cpp
+} // end namespace CppInternal
 
 #endif // CPPINTEROP_DYNAMIC_LIBRARY_MANAGER_H
