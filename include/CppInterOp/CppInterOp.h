@@ -464,6 +464,8 @@ CPPINTEROP_API std::string GetQualifiedName(TCppScope_t klass);
 /// gets the template arguments.
 CPPINTEROP_API std::string GetQualifiedCompleteName(TCppScope_t klass);
 
+CPPINTEROP_API std::string GetQualifiedCompleteNameWithTemplateArgs(TCppScope_t klass);
+
 /// Retrieves the Doxygen documentation comment for a declaration.
 /// \param[in] scope -- The declaration to get the comment for.
 /// \param[in] strip_comment_markers -- If true, removes comment markers (///,

@@ -855,6 +855,56 @@ std::string GetQualifiedCompleteName(TCppType_t klass) {
   return "<unnamed>";
 }
 
+// FIXME: Figure out how to merge with GetCompleteName.
+std::string GetQualifiedCompleteNameWithTemplateArgs(TCppType_t klass) {
+  auto& C = getSema().getASTContext();
+  auto* D = (Decl*)klass;
+
+  if (auto* ND = llvm::dyn_cast_or_null<NamedDecl>(D)) {
+    if (auto* TD = llvm::dyn_cast<TagDecl>(ND)) {
+      std::string type_name;
+      QualType QT = C.getCanonicalTagType(TD);
+      PrintingPolicy PP = C.getPrintingPolicy();
+      PP.FullyQualifiedName = true;
+      PP.SuppressUnwrittenScope = true;
+      QT.getAsStringInternal(type_name, PP);
+
+      return type_name;
+    }
+
+    if (auto* FD = llvm::dyn_cast<FunctionDecl>(ND)) {
+      PrintingPolicy PP = C.getPrintingPolicy();
+      PP.FullyQualifiedName = true;
+      PP.SuppressUnwrittenScope = true;
+
+      std::string name;
+      llvm::raw_string_ostream OS(name);
+
+      FD->printQualifiedName(OS, PP);
+
+      if (auto* Args = FD->getTemplateSpecializationArgs()) {
+        OS << '<';
+        for (unsigned i = 0; i < Args->size(); ++i) {
+          if (i > 0)
+            OS << ", ";
+          Args->get(i).print(PP, OS, /*IncludeType=*/true);
+        }
+        OS << '>';
+      }
+
+      return OS.str();
+    }
+
+    return ND->getQualifiedNameAsString();
+  }
+
+  if (llvm::isa_and_nonnull<TranslationUnitDecl>(D)) {
+    return "";
+  }
+
+  return "<unnamed>";
+}
+
 std::string GetDoxygenComment(TCppScope_t scope, bool strip_comment_markers) {
   auto* D = static_cast<Decl*>(scope);
   if (!D)
