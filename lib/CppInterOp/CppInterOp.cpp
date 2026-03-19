@@ -6511,8 +6511,17 @@ TCppObject_t Allocate(TCppScope_t scope, TCppIndex_t count) {
 }
 
 void Deallocate(TCppScope_t scope, TCppObject_t address, TCppIndex_t count) {
+  // Sized deallocation is not guaranteed to be available on all
+  // compilers/runtimes (e.g. Clang on MSYS2/MinGW-w64). In such cases,
+  // fall back to the standard unsized delete.
+  // See: https://www.open-std.org/jtc1/sc22/wg21/docs/papers/2013/n3778.html
+#if defined(__cpp_sized_deallocation)
   size_t bytes = Cpp::SizeOf(scope) * count;
   ::operator delete(address, bytes);
+#else
+  (void)scope; (void)count;
+  ::operator delete(address);
+#endif
 }
 
 // FIXME: Add optional arguments to the operator new.
