@@ -6481,6 +6481,11 @@ void GetOperator(Operator op, std::vector<TemplateArgInfo> const& arg_types,
   //       a) member operators (rare for != here)
   //       b) hidden friends declared inside the class (ADL-only)
   for (CXXRecordDecl* RD : ACS) {
+    // Some operators are implicitly defined, in some scenarios, such as operator=.
+    // We need to trigger the declaration of these so that they can show up
+    // as candidate overloads.
+    S.ForceDeclarationOfImplicitMembers(RD);
+
     DeclContext* PC = RD->getPrimaryContext();
 
     // a) any member operator!= (unlikely for __normal_iterator, but cheap)
