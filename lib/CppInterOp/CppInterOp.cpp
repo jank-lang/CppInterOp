@@ -5778,14 +5778,9 @@ CreateInterpreter(const std::vector<const char*>& Args /*={}*/,
   //
   // See: https://github.com/llvm/llvm-project/issues/200554
   llvm::orc::LLJIT* EE = compat::getExecutionEngine(*I);
-  if (auto Gen = llvm::orc::DynamicLibrarySearchGenerator::Load("ucrtbase.dll", EE->getDataLayout().getGlobalPrefix()))
-  {
-    EE->getMainJITDylib().addGenerator(std::move(*Gen));
-  }
-  else
-  {
-    llvm::consumeError(Gen.takeError());
-  }
+  auto Gen = llvm::cantFail(llvm::orc::DynamicLibrarySearchGenerator::Load(
+      "ucrtbase.dll", EE->getDataLayout().getGlobalPrefix()));
+  EE->getMainJITDylib().addGenerator(std::move(Gen));
 #endif
 
   return I;
