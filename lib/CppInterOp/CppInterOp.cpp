@@ -56,6 +56,7 @@
 #include "llvm/ExecutionEngine/Orc/CoreContainers.h"
 #endif
 #include "llvm/ExecutionEngine/Orc/Core.h"
+#include "llvm/ExecutionEngine/Orc/ExecutionUtils.h"
 #include "llvm/ExecutionEngine/Orc/Shared/ExecutorAddress.h"
 #include "llvm/IR/GlobalValue.h"
 #include "llvm/Support/Casting.h"
@@ -68,7 +69,6 @@
 #include "llvm/Support/raw_ostream.h"
 #include "llvm/TargetParser/Host.h"
 #include "llvm/TargetParser/Triple.h"
-
 #include <algorithm>
 #include <cassert>
 #include <cstddef>
@@ -5765,6 +5765,24 @@ CreateInterpreter(const std::vector<const char*>& Args /*={}*/,
       *I, "__clang_Interpreter_SetValueNoAlloc",
       reinterpret_cast<uint64_t>(&__clang_Interpreter_SetValueNoAlloc));
 #endif
+
+#ifdef _WIN32
+  // Workaround: On Windows (MSYS2/MinGW), the host binary is linked
+  // against ucrtbase.dll, but the JIT's process-wide symbol search
+  // can resolve CRT functions (fwrite, tmpfile, etc.) from msvcrt.dll
+  // instead (loaded as a transitive dependency of system DLLs). The
+  // two CRTs have incompatible internal struct layouts (e.g. FILE),
+  // causing segfaults when opaque types cross the JIT/host
+  // boundary. Loading ucrtbase explicitly ensures JIT code uses the
+  // same CRT as the host.
+  //
+  // See: https://github.com/llvm/llvm-project/issues/200554
+  llvm::orc::LLJIT* EE = compat::getExecutionEngine(*I);
+  auto Gen = llvm::cantFail(llvm::orc::DynamicLibrarySearchGenerator::Load(
+      "ucrtbase.dll", EE->getDataLayout().getGlobalPrefix()));
+  EE->getMainJITDylib().addGenerator(std::move(Gen));
+#endif
+
   return I;
 }
 
