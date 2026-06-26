@@ -785,7 +785,9 @@ std::string GetCompleteName(TCppType_t klass) {
   PrintingPolicy Policy = C.getPrintingPolicy();
   Policy.SuppressUnwrittenScope = true;
   Policy.SuppressScope = true;
+#if CLANG_VERSION_MAJOR < 23
   Policy.AnonymousTagLocations = false;
+#endif
   Policy.SuppressTemplateArgsInCXXConstructors = false;
   Policy.SuppressDefaultTemplateArgs = false;
   Policy.AlwaysIncludeTypeForTemplateArgument = true;
