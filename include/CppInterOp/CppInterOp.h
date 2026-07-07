@@ -325,6 +325,9 @@ CPPINTEROP_API bool IsFunction(TCppScope_t scope);
 /// Checks if the type is a function pointer.
 CPPINTEROP_API bool IsFunctionPointerType(TCppType_t type);
 
+/// Checks if the scope is a friend function defined inline, thus requiring ADL to call.
+CPPINTEROP_API bool IsInlineFriendFunction(TCppScope_t scope);
+
 /// Checks if the klass polymorphic.
 /// which means that the class contains or inherits a virtual function
 CPPINTEROP_API bool IsClassPolymorphic(TCppScope_t klass);

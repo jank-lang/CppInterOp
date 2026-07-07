@@ -368,6 +368,40 @@ bool IsFunction(TCppScope_t scope) {
   return isa<FunctionDecl>(D);
 }
 
+bool IsInlineFriendFunction(TCppScope_t scope) {
+  Decl* D = static_cast<Decl*>(scope);
+  auto& S = getSema();
+  ASTContext& Ctx = S.getASTContext();
+
+  // Unwrap function templates (e.g. `template<typename T> friend void f(T&) { ... }`)
+  if (auto* FTD = llvm::dyn_cast<FunctionTemplateDecl>(D))
+    D = FTD->getTemplatedDecl();
+
+  auto* FD = llvm::dyn_cast<FunctionDecl>(D);
+  if (!FD)
+    return false;
+
+  // Must actually be a friend declaration.
+  if (FD->getFriendObjectKind() == Decl::FOK_None)
+    return false;
+
+  // Must be the defining declaration (has a body), not just a friend
+  // declaration with the definition supplied elsewhere.
+  const FunctionDecl* Definition = nullptr;
+  if (!FD->isThisDeclarationADefinition()) {
+    if (!FD->hasBody(Definition))
+      return false;
+  } else {
+    Definition = FD;
+  }
+
+  // The defining declaration must be lexically nested inside the class
+  // (as opposed to a friend declared in the class and defined later at
+  // namespace scope), which is what makes it invisible to ordinary
+  // unqualified lookup and reachable only via ADL.
+  return Definition->getLexicalDeclContext()->isRecord();
+}
+
 bool IsFunctionPointerType(TCppType_t type) {
   QualType QT = QualType::getFromOpaquePtr(type);
   return QT->isFunctionPointerType();
