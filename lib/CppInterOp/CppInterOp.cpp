@@ -557,16 +557,54 @@ TCppType_t GetCommonType(TCppType_t lhs, TCppType_t rhs) {
   Sema& S = getSema();
   ASTContext& C = S.getASTContext();
 
+  // Suppress diagnostics: this is an introspection query, not real code,
+  // and LHS/RHS may legitimately have no common type at all.
+  Sema::SFINAETrap Trap(S);
+
   if (LHS->isArithmeticType() && RHS->isArithmeticType()) {
     ImplicitValueInitExpr* L = new (C) ImplicitValueInitExpr{LHS};
     ImplicitValueInitExpr* R = new (C) ImplicitValueInitExpr{RHS};
     ExprResult LRes(L), RRes(R);
     QualType Common = S.UsualArithmeticConversions(LRes, RRes, SourceLocation(),
                                                    ArithConvKind::Arithmetic);
+    if (Trap.hasErrorOccurred() || Common.isNull())
+      return nullptr;
     return Common.getAsOpaquePtr();
   }
 
-  /* TODO: Handle complex types. */
+  // Pointers, arrays (which decay to pointers), member pointers, and
+  // std::nullptr_t all funnel through the composite pointer type rules
+  // that the conditional operator itself uses.
+  if ((LHS->isPointerType() || LHS->isArrayType() || LHS->isMemberPointerType() ||
+       LHS->isNullPtrType()) &&
+      (RHS->isPointerType() || RHS->isArrayType() || RHS->isMemberPointerType() ||
+       RHS->isNullPtrType())) {
+
+    Expr* L = new (C) ImplicitValueInitExpr{LHS};
+    Expr* R = new (C) ImplicitValueInitExpr{RHS};
+
+    // Mirrors Sema::CheckConditionalOperands: array-to-pointer decay (and
+    // lvalue-to-rvalue/function-to-pointer) must happen before we ask for
+    // the composite pointer type, or "char const[5]" won't be seen as a
+    // pointer at all.
+    ExprResult LRes = S.DefaultFunctionArrayLvalueConversion(L);
+    ExprResult RRes = S.DefaultFunctionArrayLvalueConversion(R);
+    if (LRes.isInvalid() || RRes.isInvalid())
+      return nullptr;
+
+    L = LRes.get();
+    R = RRes.get();
+
+    // Note: FindCompositePointerType takes Expr*& and may rewrite L/R with
+    // inserted qualification-conversion casts; we don't need those nodes,
+    // only the resulting type.
+    QualType Composite = S.FindCompositePointerType(SourceLocation(), L, R);
+
+    if (Trap.hasErrorOccurred() || Composite.isNull())
+      return nullptr;
+
+    return Composite.getAsOpaquePtr();
+  }
 
   return nullptr;
 }
