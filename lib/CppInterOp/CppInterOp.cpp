@@ -6141,22 +6141,17 @@ std::string ObjToString(const char* type, void* obj) {
 }
 
 static Decl* InstantiateTemplate(TemplateDecl* TemplateD,
-                                 TemplateArgumentListInfo& TLI, Sema& S,
-                                 bool instantiate_body) {
-  // This is not right but we don't have a lot of options to choose from as a
-  // template instantiation requires a valid source location.
+                                  TemplateArgumentListInfo& TLI, Sema& S,
+                                  bool instantiate_body) {
   SourceLocation fakeLoc = GetValidSLoc(S);
   if (auto* FunctionTemplate = dyn_cast<FunctionTemplateDecl>(TemplateD)) {
     FunctionDecl* Specialization = nullptr;
     clang::sema::TemplateDeductionInfo Info(fakeLoc);
     TemplateDeductionResult Result =
         S.DeduceTemplateArguments(FunctionTemplate, &TLI, Specialization, Info,
-                                  /*IsAddressOfFunction*/ true);
-    if (Result != TemplateDeductionResult::Success) {
-      // FIXME: Diagnose what happened.
-      (void)Result;
+                                   /*IsAddressOfFunction*/ true);
+    if (Result != TemplateDeductionResult::Success)
       return nullptr;
-    }
     if (instantiate_body)
       InstantiateFunctionDefinition(Specialization);
     return Specialization;
@@ -6165,35 +6160,36 @@ static Decl* InstantiateTemplate(TemplateDecl* TemplateD,
   if (auto* VarTemplate = dyn_cast<VarTemplateDecl>(TemplateD)) {
     DeclResult R =
         S.CheckVarTemplateId(VarTemplate, fakeLoc, fakeLoc, TLI, false);
-    if (R.isInvalid()) {
-      // FIXME: Diagnose
+    if (R.isInvalid())
       return nullptr;
-    }
     return R.get();
   }
 
-  // This will instantiate tape<T> type and return it.
   SourceLocation noLoc;
   QualType TT = S.CheckTemplateIdType(ElaboratedTypeKeyword::None,
-                                      TemplateName(TemplateD), noLoc, TLI,
-                                      nullptr, false);
-  if (TT.isNull()) {
+                                       TemplateName(TemplateD), noLoc, TLI,
+                                       nullptr, false);
+  if (TT.isNull())
     return nullptr;
+
+  S.RequireCompleteType(fakeLoc, TT, diag::err_tentative_def_incomplete_type);
+
+  // RequireCompleteType instantiates the class shell and field decls, but
+  // NSDMIs (default member initializers) are only checked lazily, when the
+  // implicit default constructor is actually defined.
+  if (CXXRecordDecl* RD = TT->getAsCXXRecordDecl()) {
+    RD = RD->getDefinition();
+    if (RD && !RD->isInvalidDecl()) {
+      S.ForceDeclarationOfImplicitMembers(RD);
+      if (CXXConstructorDecl* Ctor = S.LookupDefaultConstructor(RD)) {
+        S.MarkFunctionReferenced(fakeLoc, Ctor);
+        if (Ctor->isDefaulted() && !Ctor->isDeleted() && !Ctor->isDefined())
+          S.DefineImplicitDefaultConstructor(fakeLoc, Ctor);
+      }
+    }
   }
 
-  // Perhaps we can extract this into a new interface.
-  S.RequireCompleteType(fakeLoc, TT, diag::err_tentative_def_incomplete_type);
   return GetScopeFromType(TT);
-
-  // ASTContext &C = S.getASTContext();
-  // // Get clad namespace and its identifier clad::.
-  // CXXScopeSpec CSS;
-  // CSS.Extend(C, GetCladNamespace(), noLoc, noLoc);
-  // NestedNameSpecifier* NS = CSS.getScopeRep();
-
-  // // Create elaborated type with namespace specifier,
-  // // i.e. class<T> -> clad::class<T>
-  // return C.getElaboratedType(ETK_None, NS, TT);
 }
 
 Decl* InstantiateTemplate(TemplateDecl* TemplateD,
