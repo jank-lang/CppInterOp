@@ -548,6 +548,11 @@ GetFunctionTemplatedDecls(TCppScope_t klass,
 ///\returns if a class has a default constructor.
 CPPINTEROP_API bool HasDefaultConstructor(TCppScope_t scope);
 
+CPPINTEROP_API bool HasUsableCopyConstructor(TCppScope_t scope);
+CPPINTEROP_API bool HasDeletedCopyConstructor(TCppScope_t scope);
+CPPINTEROP_API bool HasUsableMoveConstructor(TCppScope_t scope);
+CPPINTEROP_API bool HasDeletedMoveConstructor(TCppScope_t scope);
+
 ///\returns the default constructor of a class, if any.
 CPPINTEROP_API TCppFunction_t GetDefaultConstructor(TCppScope_t scope);
 

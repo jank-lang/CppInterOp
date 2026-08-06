@@ -1311,6 +1311,60 @@ bool HasDefaultConstructor(TCppScope_t scope) {
   return false;
 }
 
+bool HasUsableCopyConstructor(TCppScope_t scope) {
+  auto* D = (clang::Decl*)scope;
+
+  if (auto* CXXRD = llvm::dyn_cast_or_null<CXXRecordDecl>(D)) {
+    getSema().ForceDeclarationOfImplicitMembers(CXXRD);
+    if(CXXRD->hasSimpleCopyConstructor())
+      return true;
+
+    if(CXXRD->hasUserDeclaredCopyConstructor()) {
+      return !getSema().LookupCopyingConstructor(CXXRD, 0)->isDeleted();
+    }
+  }
+
+  return false;
+}
+
+bool HasDeletedCopyConstructor(TCppScope_t scope) {
+  auto* D = (clang::Decl*)scope;
+
+  if (auto* CXXRD = llvm::dyn_cast_or_null<CXXRecordDecl>(D))
+    if(CXXRD->hasUserDeclaredCopyConstructor()) {
+      return getSema().LookupCopyingConstructor(CXXRD, 0)->isDeleted();
+    }
+
+  return false;
+}
+
+bool HasUsableMoveConstructor(TCppScope_t scope) {
+  auto* D = (clang::Decl*)scope;
+
+  if (auto* CXXRD = llvm::dyn_cast_or_null<CXXRecordDecl>(D)) {
+    getSema().ForceDeclarationOfImplicitMembers(CXXRD);
+    if(CXXRD->hasSimpleMoveConstructor())
+      return true;
+
+    if(CXXRD->hasUserDeclaredMoveConstructor()) {
+      return !getSema().LookupMovingConstructor(CXXRD, 0)->isDeleted();
+    }
+  }
+
+  return false;
+}
+
+bool HasDeletedMoveConstructor(TCppScope_t scope) {
+  auto* D = (clang::Decl*)scope;
+
+  if (auto* CXXRD = llvm::dyn_cast_or_null<CXXRecordDecl>(D))
+    if(CXXRD->hasUserDeclaredMoveConstructor()) {
+      return getSema().LookupMovingConstructor(CXXRD, 0)->isDeleted();
+    }
+
+  return false;
+}
+
 TCppFunction_t GetDefaultConstructor(compat::Interpreter& interp,
                                      TCppScope_t scope) {
   if (!HasDefaultConstructor(scope))
