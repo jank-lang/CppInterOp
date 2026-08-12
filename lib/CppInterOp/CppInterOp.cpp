@@ -1396,13 +1396,18 @@ void DumpScope(TCppScope_t scope) {
 }
 
 std::vector<TCppFunction_t> GetFunctionsUsingName(TCppScope_t scope,
-                                                  const std::string& name) {
+                                                   const std::string& name) {
   auto* D = (Decl*)scope;
 
   if (!scope || name.empty())
     return {};
 
   D = GetUnderlyingScope(D);
+
+  // Not every Decl doubles as a DeclContext (e.g. VarDecl, FieldDecl,
+  // EnumConstantDecl). Only DeclContext-capable decls can be looked into.
+  if (!D || !llvm::isa<DeclContext>(D))
+    return {};
 
   std::vector<TCppFunction_t> funcs;
   llvm::StringRef Name(name);
