@@ -910,12 +910,14 @@ CPPINTEROP_API void GetOperator(Operator op,
 ///\param[in] Args - the list of arguments for interpreter constructor.
 ///\param[in] CPPINTEROP_EXTRA_INTERPRETER_ARGS - an env variable, if defined,
 ///           adds additional arguments to the interpreter.
+///\param[out] PCHOutOfDate - set to true when an included PCH is stale.
 ///\returns nullptr on failure.
 CPPINTEROP_API TInterp_t
 CreateInterpreter(const std::vector<const char*>& Args = {},
                   const std::vector<const char*>& GpuArgs = {},
                   const std::map<char const*, std::string_view>& VFS = {},
-                  const std::optional<int>& CM = std::nullopt);
+                  const std::optional<int>& CM = std::nullopt,
+                  bool* PCHOutOfDate = nullptr);
 
 /// Deletes an instance of an interpreter.
 ///\param[in] I - the interpreter to be deleted, if nullptr, deletes the last.

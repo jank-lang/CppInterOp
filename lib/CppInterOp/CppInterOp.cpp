@@ -5776,7 +5776,8 @@ TInterp_t
 CreateInterpreter(const std::vector<const char*>& Args /*={}*/,
                   const std::vector<const char*>& GpuArgs /*={}*/,
                   const std::map<char const*, std::string_view>& VFS /*={}*/,
-                  const std::optional<int>& CM /*=std::nullopt*/) {
+                  const std::optional<int>& CM /*=std::nullopt*/,
+                  bool* PCHOutOfDate /*=nullptr*/) {
   std::string MainExecutableName = sys::fs::getMainExecutable(nullptr, nullptr);
   // In some systems, CppInterOp cannot manually detect the correct resource.
   // Then the -resource-dir passed by the user is assumed to be the correct
@@ -5830,11 +5831,14 @@ CreateInterpreter(const std::vector<const char*>& Args /*={}*/,
                  [&](const std::string& str) { return str.c_str(); });
 
 #ifdef CPPINTEROP_USE_CLING
+  if (PCHOutOfDate)
+    *PCHOutOfDate = false;
   auto I = new compat::Interpreter(ClingArgv.size(), &ClingArgv[0]);
 #else
   auto Interp = compat::Interpreter::create(static_cast<int>(ClingArgv.size()),
                                             ClingArgv.data(), nullptr, {},
-                                            nullptr, true, VFS, CM);
+                                            nullptr, true, VFS, CM,
+                                            PCHOutOfDate);
   if (!Interp)
     return nullptr;
   auto* I = Interp.release();

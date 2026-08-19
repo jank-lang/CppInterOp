@@ -214,7 +214,8 @@ public:
              moduleExtensions = {},
          void* extraLibHandle = nullptr, bool noRuntime = true,
          const std::map<char const*, std::string_view>& VFS = {},
-         const std::optional<int> &CM = std::nullopt) {
+         const std::optional<int> &CM = std::nullopt,
+         bool *PCHOutOfDate = nullptr) {
     // Initialize all targets (required for device offloading)
     llvm::InitializeAllTargetInfos();
     llvm::InitializeAllTargets();
@@ -252,9 +253,11 @@ public:
     // Currently, we can't pass IOContext in `createClangInterpreter`, that's
     // why fd's are passed. This should be refactored later.
     auto CI =
-        compat::createClangInterpreter(vargs, stdin_fd, stdout_fd, stderr_fd, VFS, CM);
+        compat::createClangInterpreter(vargs, stdin_fd, stdout_fd, stderr_fd,
+                                       VFS, CM, PCHOutOfDate);
     if (!CI) {
-      llvm::errs() << "Interpreter creation failed\n";
+      if (!PCHOutOfDate || !*PCHOutOfDate)
+        llvm::errs() << "Interpreter creation failed\n";
       return nullptr;
     }
 

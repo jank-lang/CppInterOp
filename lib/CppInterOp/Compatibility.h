@@ -65,6 +65,8 @@ static inline char* GetEnv(const char* Var_Name) {
 // std::regex breaks pytorch's jit: pytorch/pytorch#49460
 #include "llvm/Support/Regex.h"
 
+#include <memory>
+
 #ifdef CPPINTEROP_USE_CLING
 
 #include "cling/Interpreter/DynamicLibraryManager.h"
@@ -183,6 +185,7 @@ inline void codeComplete(std::vector<std::string>& Results,
 
 #include "DynamicLibraryManager.h"
 #include "clang/AST/Mangle.h"
+#include "clang/Basic/DiagnosticSerialization.h"
 #include "clang/Frontend/CompilerInstance.h"
 #include "clang/Interpreter/Interpreter.h"
 #include "clang/Interpreter/Value.h"
@@ -202,12 +205,59 @@ inline void codeComplete(std::vector<std::string>& Results,
 
 namespace compat {
 
+class PCHStalenessDiagnosticConsumer final : public clang::DiagnosticConsumer {
+  std::unique_ptr<clang::DiagnosticConsumer> Target;
+  bool &OutOfDate;
+
+public:
+  PCHStalenessDiagnosticConsumer(
+      std::unique_ptr<clang::DiagnosticConsumer> Target,
+      bool &OutOfDate)
+      : Target(std::move(Target)), OutOfDate(OutOfDate) {}
+
+  void BeginSourceFile(const clang::LangOptions &LangOpts,
+                       const clang::Preprocessor *PP = nullptr) override {
+    Target->BeginSourceFile(LangOpts, PP);
+  }
+
+  void EndSourceFile() override { Target->EndSourceFile(); }
+
+  bool IncludeInDiagnosticCounts() const override {
+    return Target->IncludeInDiagnosticCounts();
+  }
+
+  void HandleDiagnostic(clang::DiagnosticsEngine::Level DiagLevel,
+                        const clang::Diagnostic &Info) override {
+    auto const IsPCHStalenessDiagnostic{
+      Info.getID() == clang::diag::err_fe_ast_file_modified
+      || Info.getID() == clang::diag::note_fe_ast_file_modified
+      || Info.getID() == clang::diag::note_ast_file_required_by
+      || Info.getID() == clang::diag::note_ast_file_rebuild_required
+      || Info.getID() == clang::diag::note_ast_file_input_files_validation_status
+    };
+    if (Info.getID() == clang::diag::err_fe_ast_file_modified
+        || Info.getID() == clang::diag::note_fe_ast_file_modified)
+      OutOfDate = true;
+    if (IsPCHStalenessDiagnostic || (OutOfDate && DiagLevel == clang::DiagnosticsEngine::Note))
+      return;
+
+    clang::DiagnosticConsumer::HandleDiagnostic(DiagLevel, Info);
+    Target->HandleDiagnostic(DiagLevel, Info);
+  }
+
+  void clear() override {
+    clang::DiagnosticConsumer::clear();
+    Target->clear();
+  }
+};
+
 inline std::unique_ptr<clang::Interpreter>
 createClangInterpreter(std::vector<const char*>& args,
                        int stdin_fd = -1,
                        int stdout_fd = -1, int stderr_fd = -1,
                        const std::map<char const*, std::string_view>& VFS = {},
-                       const std::optional<int> &CM = std::nullopt) {
+                       const std::optional<int> &CM = std::nullopt,
+                       bool *PCHOutOfDate = nullptr) {
   auto has_arg = [](const char* x, llvm::StringRef match = "cuda") {
     llvm::StringRef Arg = x;
     Arg = Arg.trim().ltrim('-');
@@ -258,6 +308,16 @@ createClangInterpreter(std::vector<const char*>& args,
 
   OverlayFS->pushOverlay(InMemFS);
   (*ciOrErr)->createVirtualFileSystem(OverlayFS);
+
+  if (PCHOutOfDate)
+  {
+    *PCHOutOfDate = false;
+    auto &CI{ **ciOrErr };
+    auto DiagnosticClient{ CI.getDiagnostics().takeClient() };
+    CI.getDiagnostics().setClient(
+      new PCHStalenessDiagnosticConsumer(std::move(DiagnosticClient),
+                                         *PCHOutOfDate));
+  }
 
   auto IEB = std::make_unique<clang::IncrementalExecutorBuilder>();
   if (CM)
@@ -318,11 +378,19 @@ createClangInterpreter(std::vector<const char*>& args,
                                                        std::move(DeviceCI))
                   : clang::Interpreter::create(std::move(*ciOrErr), std::move(IEB));
 #endif
+  if (PCHOutOfDate && *PCHOutOfDate)
+  {
+    if (!innerOrErr)
+      llvm::consumeError(innerOrErr.takeError());
+    return nullptr;
+  }
+
   if (!innerOrErr) {
     llvm::logAllUnhandledErrors(innerOrErr.takeError(), llvm::errs(),
                                 "Failed to build Interpreter:");
     return nullptr;
   }
+
   if (CudaEnabled) {
     if (auto Err = (*innerOrErr)->LoadDynamicLibrary("libcudart.so")) {
       llvm::logAllUnhandledErrors(std::move(Err), llvm::errs(),
