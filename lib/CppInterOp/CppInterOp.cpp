@@ -1514,9 +1514,54 @@ std::string GetFunctionSignature(TCppFunction_t func) {
   Policy.TerseOutput = true;
   Policy.FullyQualifiedName = true;
   Policy.SuppressDefaultTemplateArgs = false;
+  Policy.PolishForDeclaration = true;
   FD->print(SS, Policy);
   SS.flush();
   return Signature;
+}
+
+std::string GetFunctionSourceInfo(TCppType_t func) {
+  if (!func)
+    return "";
+
+  auto* D = (clang::Decl*)func;
+  clang::FunctionDecl* FD;
+
+  if (llvm::dyn_cast<FunctionDecl>(D))
+    FD = llvm::dyn_cast<FunctionDecl>(D);
+  else if (auto* FTD = llvm::dyn_cast<clang::FunctionTemplateDecl>(D))
+    FD = FTD->getTemplatedDecl();
+  else
+    return "";
+
+  if (!FD)
+    return "";
+
+  clang::ASTContext &Ctx = FD->getASTContext();
+  clang::SourceManager &SM = Ctx.getSourceManager();
+
+  // Prefer the location of the definition if one is available,
+  // otherwise fall back to the declaration's location.
+  clang::SourceLocation Loc = FD->getLocation();
+  if (const clang::FunctionDecl* Def = FD->getDefinition())
+    Loc = Def->getLocation();
+
+  if (Loc.isInvalid())
+    return "";
+
+  clang::PresumedLoc PLoc = SM.getPresumedLoc(Loc);
+  if (PLoc.isInvalid())
+    return "";
+
+  llvm::StringRef FileName = PLoc.getFilename();
+  unsigned Line = PLoc.getLine();
+
+  std::string Result;
+  llvm::raw_string_ostream OS(Result);
+  OS << FileName << ":" << Line;
+  OS.flush();
+
+  return Result;
 }
 
 TCppType_t GetFunctionReturnTypeFromType(TCppType_t func) {
@@ -1933,7 +1978,13 @@ BestOverloadMatch(const std::vector<TCppScope_t>& candidates,
     ambiguous = candSet.CompleteCandidates(
         S, OverloadCandidateDisplayKind::OCD_AmbiguousCandidates, member_args);
 
-  return std::vector<TCppScope_t>(ambiguous.begin(), ambiguous.end());
+  std::vector<TCppScope_t> ret;
+  ret.reserve(ambiguous.size());
+  for(auto const C : ambiguous)
+  {
+    ret.emplace_back(C->Function);
+  }
+  return ret;
 }
 
 // Gets the AccessSpecifier of the function and checks if it is equal to
@@ -6533,7 +6584,7 @@ std::string GetFunctionArgName(TCppFunction_t func, TCppIndex_t param_index) {
   else if (auto* FD = llvm::dyn_cast_or_null<clang::FunctionTemplateDecl>(D))
     PI = (FD->getTemplatedDecl())->getParamDecl(param_index);
 
-  return PI->getNameAsString();
+  return PI->getName().str();
 }
 
 std::string GetSpellingFromOperator(Operator Operator) {

@@ -583,6 +583,8 @@ CPPINTEROP_API TCppType_t GetFunctionArgType(TCppFunction_t func,
 /// void N::f(int i, double d, long l = 0, char ch = 'a').
 CPPINTEROP_API std::string GetFunctionSignature(TCppType_t func);
 
+CPPINTEROP_API std::string GetFunctionSourceInfo(TCppType_t func);
+
 /// Gets the return type of the provided function.
 CPPINTEROP_API TCppType_t GetFunctionReturnTypeFromType(TCppType_t func);
 
