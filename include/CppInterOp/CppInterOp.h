@@ -583,7 +583,7 @@ CPPINTEROP_API TCppType_t GetFunctionArgType(TCppFunction_t func,
 /// void N::f(int i, double d, long l = 0, char ch = 'a').
 CPPINTEROP_API std::string GetFunctionSignature(TCppType_t func);
 
-CPPINTEROP_API std::string GetFunctionSourceInfo(TCppType_t func);
+CPPINTEROP_API std::string GetFunctionSourceInfo(TCppFunction_t func);
 
 /// Gets the return type of the provided function.
 CPPINTEROP_API TCppType_t GetFunctionReturnTypeFromType(TCppType_t func);
@@ -596,6 +596,8 @@ CPPINTEROP_API TCppIndex_t GetFunctionNumArgsFromType(TCppType_t func);
 /// from the GetFunctionNumArgs() function.
 CPPINTEROP_API TCppType_t GetFunctionArgTypeFromType(TCppType_t func,
                                                      TCppIndex_t iarg);
+
+CPPINTEROP_API bool IsFunctionVariadic(TCppFunction_t function);
 
 ///\returns if a function was marked as \c =delete.
 CPPINTEROP_API bool IsFunctionDeleted(TCppConstFunction_t function);

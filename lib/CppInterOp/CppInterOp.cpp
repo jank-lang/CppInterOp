@@ -1520,7 +1520,7 @@ std::string GetFunctionSignature(TCppFunction_t func) {
   return Signature;
 }
 
-std::string GetFunctionSourceInfo(TCppType_t func) {
+std::string GetFunctionSourceInfo(TCppFunction_t func) {
   if (!func)
     return "";
 
@@ -1620,6 +1620,26 @@ TCppType_t GetFunctionArgTypeFromType(TCppType_t func, TCppIndex_t iarg) {
   }
 
   return nullptr;
+}
+
+bool IsFunctionVariadic(TCppFunction_t func) {
+  if (!func)
+    return false;
+
+  auto* D = (clang::Decl*)func;
+  clang::FunctionDecl* FD;
+
+  if (llvm::dyn_cast<FunctionDecl>(D))
+    FD = llvm::dyn_cast<FunctionDecl>(D);
+  else if (auto* FTD = llvm::dyn_cast<clang::FunctionTemplateDecl>(D))
+    FD = FTD->getTemplatedDecl();
+  else
+    return false;
+
+  if (!FD)
+    return false;
+
+  return FD->isVariadic();
 }
 
 // Internal functions that are not needed outside the library are
