@@ -1663,9 +1663,23 @@ bool IsTemplateInstantiationOrSpecialization(Decl* D) {
 }
 } // namespace
 
-bool IsFunctionDeleted(TCppConstFunction_t function) {
-  const auto* FD =
-      cast<const FunctionDecl>(static_cast<const clang::Decl*>(function));
+bool IsFunctionDeleted(TCppConstFunction_t func) {
+  if (!func)
+    return false;
+
+  auto* D = (clang::Decl*)func;
+  clang::FunctionDecl* FD;
+
+  if (llvm::dyn_cast<FunctionDecl>(D))
+    FD = llvm::dyn_cast<FunctionDecl>(D);
+  else if (auto* FTD = llvm::dyn_cast<clang::FunctionTemplateDecl>(D))
+    FD = FTD->getTemplatedDecl();
+  else
+    return false;
+
+  if (!FD)
+    return false;
+
   return FD->isDeleted();
 }
 
