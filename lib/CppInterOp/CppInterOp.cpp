@@ -1483,6 +1483,9 @@ TCppIndex_t GetFunctionRequiredArgs(TCppConstFunction_t func) {
 TCppType_t GetFunctionArgType(TCppFunction_t func, TCppIndex_t iarg) {
   auto* D = (clang::Decl*)func;
 
+  if (auto* FTD = llvm::dyn_cast_or_null<clang::FunctionTemplateDecl>(D))
+    D = FTD->getTemplatedDecl();
+
   if (auto* FD = llvm::dyn_cast_or_null<clang::FunctionDecl>(D)) {
     if (iarg < FD->getNumParams()) {
       auto* PVD = FD->getParamDecl(iarg);
@@ -1863,22 +1866,21 @@ BestOverloadFunctionMatch(const std::vector<TCppFunction_t>& candidates,
   return Result;
 }
 
-std::vector<TCppScope_t>
-BestOverloadMatch(const std::vector<TCppScope_t>& candidates,
-                  const std::vector<TemplateArgInfo>& arg_types,
-                  const std::vector<TCppScope_t>& arg_scopes) {
-  Sema& S = getSema();
+namespace {
+
+void AddOverloadCandidates(
+    Sema& S, const std::vector<TCppScope_t>& candidates,
+    const std::vector<TemplateArgInfo>& arg_types,
+    const std::vector<TCppScope_t>& arg_scopes, OverloadCandidateSet& candSet,
+    SmallVectorImpl<Expr*>& non_member_args,
+    SmallVectorImpl<Expr*>& member_args, bool& has_member_candidate) {
   ASTContext& C = S.getASTContext();
   SourceLocation Loc;
 
-  OverloadCandidateSet candSet(
-      Loc, OverloadCandidateSet::CandidateSetKind::CSK_Normal);
-
-  SmallVector<Expr*, 8> non_member_args;
-  SmallVector<Expr*, 8> member_args;
   for (unsigned i = 0; i < arg_types.size(); ++i) {
     QualType ArgTy = QualType::getFromOpaquePtr(arg_types[i].m_Type);
-    Decl* ArgDecl = (Decl*)arg_scopes[i];
+    Decl* ArgDecl =
+        i < arg_scopes.size() ? static_cast<Decl*>(arg_scopes[i]) : nullptr;
 
     if (auto* FTD = dyn_cast_or_null<FunctionTemplateDecl>(ArgDecl)) {
       UnresolvedSet<8> Unres;
@@ -1908,9 +1910,6 @@ BestOverloadMatch(const std::vector<TCppScope_t>& candidates,
     }
   }
 
-  bool has_member_candidate{};
-
-  // Returns whether the function should be considered for other candidacy.
   auto register_member = [&](CXXMethodDecl* MD,
                              FunctionTemplateDecl* FTD) -> bool {
     if (MD->isDeleted())
@@ -1958,7 +1957,7 @@ BestOverloadMatch(const std::vector<TCppScope_t>& candidates,
   };
 
   for (TCppScope_t F : candidates) {
-    Decl* D = (Decl*)F;
+    Decl* D = static_cast<Decl*>(F);
 
     // Unwrap ConstructorUsingShadowDecl (from `using Base::Base;`)
     // to get the inherited constructor and add it in the derived class context.
@@ -1972,7 +1971,6 @@ BestOverloadMatch(const std::vector<TCppScope_t>& candidates,
       DeclAccessPair found = DeclAccessPair::make(CD, Shadow->getAccess());
       // Pass the derived class as the object type so Sema checks the right
       // conversion sequences.
-      QualType DerivedTy = S.Context.getCanonicalTagType(Shadow->getParent());
       S.AddOverloadCandidate(CD, found, non_member_args, candSet);
       continue;
     }
@@ -1999,6 +1997,98 @@ BestOverloadMatch(const std::vector<TCppScope_t>& candidates,
       continue;
     }
   }
+}
+
+bool IsNonStaticMemberCandidate(Decl* D) {
+  if (auto* FTD = dyn_cast_or_null<FunctionTemplateDecl>(D))
+    D = FTD->getTemplatedDecl();
+  auto* MD = dyn_cast_or_null<CXXMethodDecl>(D);
+  return MD && !isa<CXXConstructorDecl>(MD) && !isa<CXXDestructorDecl>(MD) &&
+         !MD->isStatic();
+}
+
+OverloadCandidateConversion GetCandidateConversion(
+    const ImplicitConversionSequence& Conversion, const ASTContext& C) {
+  if (!Conversion.isInitialized() || Conversion.isBad() ||
+      Conversion.isAmbiguous())
+    return OverloadCandidateConversion::Invalid;
+  if (Conversion.isUserDefined())
+    return OverloadCandidateConversion::UserDefined;
+  if (Conversion.isStandard())
+    return Conversion.Standard.isPerfect(C)
+               ? OverloadCandidateConversion::None
+               : OverloadCandidateConversion::Implicit;
+  return OverloadCandidateConversion::Implicit;
+}
+
+class DiagnosticTextConsumer final : public DiagnosticConsumer {
+public:
+  void HandleDiagnostic(DiagnosticsEngine::Level Level,
+                        const Diagnostic& Info) override {
+    if (Level != DiagnosticsEngine::Note)
+      return;
+    SmallString<256> Message;
+    Info.FormatDiagnostic(Message);
+    if (Message.empty())
+      return;
+    if (!Text.empty())
+      Text += " ";
+    Text.append(Message.begin(), Message.end());
+  }
+
+  std::string Text;
+};
+
+class DiagnosticClientRAII {
+private:
+  DiagnosticsEngine& Diags;
+  DiagnosticConsumer* OldClient;
+  std::unique_ptr<DiagnosticConsumer> OldOwner;
+  bool OldSuppressAllDiagnostics;
+  bool OldLastDiagnosticIgnored;
+
+public:
+  explicit DiagnosticClientRAII(DiagnosticsEngine& Diags)
+      : Diags(Diags), OldClient(Diags.getClient()),
+        OldOwner(Diags.takeClient()),
+        OldSuppressAllDiagnostics(Diags.getSuppressAllDiagnostics()),
+        OldLastDiagnosticIgnored(Diags.isLastDiagnosticIgnored()) {
+    Diags.setClient(&Consumer, false);
+    Diags.setSuppressAllDiagnostics(false);
+    Diags.setLastDiagnosticIgnored(false);
+  }
+
+  ~DiagnosticClientRAII() {
+    if (OldOwner) {
+      auto* Client = OldOwner.release();
+      Diags.setClient(Client, true);
+    } else {
+      Diags.setClient(OldClient, false);
+    }
+    Diags.setSuppressAllDiagnostics(OldSuppressAllDiagnostics);
+    Diags.setLastDiagnosticIgnored(OldLastDiagnosticIgnored);
+  }
+
+  DiagnosticTextConsumer Consumer;
+};
+
+} // namespace
+
+std::vector<TCppScope_t>
+BestOverloadMatch(const std::vector<TCppScope_t>& candidates,
+                  const std::vector<TemplateArgInfo>& arg_types,
+                  const std::vector<TCppScope_t>& arg_scopes) {
+  Sema& S = getSema();
+  SourceLocation Loc;
+
+  OverloadCandidateSet candSet(
+      Loc, OverloadCandidateSet::CandidateSetKind::CSK_Normal);
+
+  SmallVector<Expr*, 8> non_member_args;
+  SmallVector<Expr*, 8> member_args;
+  bool has_member_candidate{};
+  AddOverloadCandidates(S, candidates, arg_types, arg_scopes, candSet,
+                        non_member_args, member_args, has_member_candidate);
 
   OverloadCandidateSet::iterator best;
   candSet.BestViableFunction(S, Loc, best);
@@ -2021,10 +2111,74 @@ BestOverloadMatch(const std::vector<TCppScope_t>& candidates,
   return ret;
 }
 
+OverloadCandidateInfo
+GetOverloadCandidateInfo(TCppScope_t candidate,
+                         const std::vector<TemplateArgInfo>& arg_types,
+                         const std::vector<TCppScope_t>& arg_scopes) {
+  OverloadCandidateInfo ret;
+  if (!candidate)
+    return ret;
+
+  Sema& S = getSema();
+  ASTContext& C = S.getASTContext();
+  SourceLocation Loc;
+  OverloadCandidateSet candSet(
+      Loc, OverloadCandidateSet::CandidateSetKind::CSK_Normal);
+  SmallVector<Expr*, 8> non_member_args;
+  SmallVector<Expr*, 8> member_args;
+  bool has_member_candidate{};
+  AddOverloadCandidates(S, {candidate}, arg_types, arg_scopes, candSet,
+                        non_member_args, member_args, has_member_candidate);
+  if (candSet.empty())
+    return ret;
+
+  OverloadCandidateSet::iterator Candidate = candSet.begin();
+  ret.m_Viable = Candidate->Viable;
+  auto* D = static_cast<Decl*>(candidate);
+  auto const is_function_template = isa<FunctionTemplateDecl>(D);
+  ret.m_IsTemplateInstantiationFailure =
+      !ret.m_Viable && is_function_template &&
+      (Candidate->FailureKind == ovl_fail_bad_deduction ||
+       Candidate->FailureKind == ovl_fail_constraints_not_satisfied);
+
+  SmallVector<OverloadCandidate*, 1> candidates{&*Candidate};
+  auto const& diagnostic_args =
+      has_member_candidate ? member_args : non_member_args;
+  {
+    DiagnosticClientRAII diagnostic_client{S.getDiagnostics()};
+    candSet.NoteCandidates(S, diagnostic_args, candidates);
+    ret.m_Reason = diagnostic_client.Consumer.Text;
+  }
+
+  if (auto* FTD = dyn_cast<FunctionTemplateDecl>(D))
+    D = FTD->getTemplatedDecl();
+  auto* FD = dyn_cast_or_null<FunctionDecl>(D);
+  auto const member_offset = has_member_candidate ? 1u : 0u;
+  auto const arg_count = arg_types.size() > member_offset
+                              ? arg_types.size() - member_offset
+                              : 0u;
+  auto const param_count = FD ? FD->getNumParams() : 0u;
+  auto const result_count = std::min(arg_count, static_cast<size_t>(param_count));
+  for (size_t i{}; i < result_count; ++i) {
+    auto const conversion_index = i + member_offset;
+    auto const conversion =
+        conversion_index < Candidate->Conversions.size()
+            ? GetCandidateConversion(Candidate->Conversions[conversion_index],
+                                      C)
+            : OverloadCandidateConversion::Invalid;
+    ret.m_Arguments.emplace_back(
+        OverloadCandidateArgument{GetFunctionArgType(candidate, i), conversion});
+  }
+
+  return ret;
+}
+
 // Gets the AccessSpecifier of the function and checks if it is equal to
 // the provided AccessSpecifier.
 bool CheckMethodAccess(TCppFunction_t method, AccessSpecifier AS) {
   auto* D = (Decl*)method;
+  if (auto* FTD = dyn_cast_or_null<FunctionTemplateDecl>(D))
+    D = FTD->getTemplatedDecl();
   if (auto* CXXMD = llvm::dyn_cast_or_null<CXXMethodDecl>(D)) {
     return CXXMD->getAccess() == AS;
   }
@@ -2033,8 +2187,10 @@ bool CheckMethodAccess(TCppFunction_t method, AccessSpecifier AS) {
 }
 
 bool IsMethod(TCppConstFunction_t method) {
-  return dyn_cast_or_null<CXXMethodDecl>(
-      static_cast<const clang::Decl*>(method));
+  const auto* D = static_cast<const clang::Decl*>(method);
+  if (auto* FTD = dyn_cast_or_null<FunctionTemplateDecl>(D))
+    D = FTD->getTemplatedDecl();
+  return dyn_cast_or_null<CXXMethodDecl>(D);
 }
 
 bool IsPublicMethod(TCppFunction_t method) {
@@ -2063,6 +2219,8 @@ bool IsDestructor(TCppConstFunction_t method) {
 
 bool IsStaticMethod(TCppConstFunction_t method) {
   const auto* D = static_cast<const Decl*>(method);
+  if (auto* FTD = dyn_cast_or_null<FunctionTemplateDecl>(D))
+    D = FTD->getTemplatedDecl();
   if (auto* CXXMD = llvm::dyn_cast_or_null<CXXMethodDecl>(D)) {
     return CXXMD->isStatic();
   }

@@ -285,6 +285,26 @@ struct TemplateArgInfo {
       : m_Type(type), m_IntegralValue(integral_value) {}
 };
 
+enum class OverloadCandidateConversion : unsigned char {
+  Invalid,
+  None,
+  Implicit,
+  UserDefined,
+};
+
+struct OverloadCandidateArgument {
+  TCppType_t m_ParamType = nullptr;
+  OverloadCandidateConversion m_Conversion =
+      OverloadCandidateConversion::Invalid;
+};
+
+struct OverloadCandidateInfo {
+  bool m_Viable = false;
+  bool m_IsTemplateInstantiationFailure = false;
+  std::string m_Reason;
+  std::vector<OverloadCandidateArgument> m_Arguments;
+};
+
 ///\returns the version string information of the library.
 CPPINTEROP_API std::string GetVersion();
 
@@ -1076,6 +1096,16 @@ CPPINTEROP_API std::vector<TCppScope_t>
 BestOverloadMatch(const std::vector<TCppScope_t>& candidates,
                   const std::vector<TemplateArgInfo>& arg_types,
                   const std::vector<TCppScope_t>& arg_scopes);
+
+/// Gets Clang's overload-resolution result for a single candidate.
+///
+/// The argument types and scopes describe the complete call, including the
+/// invoking object for a non-static member function. Returned argument
+/// information excludes that implicit object argument.
+CPPINTEROP_API OverloadCandidateInfo
+GetOverloadCandidateInfo(TCppScope_t candidate,
+                         const std::vector<TemplateArgInfo>& arg_types,
+                         const std::vector<TCppScope_t>& arg_scopes);
 
 CPPINTEROP_API void GetAllCppNames(TCppScope_t scope,
                                    std::set<std::string>& names);
