@@ -487,6 +487,8 @@ CPPINTEROP_API std::string GetQualifiedName(TCppScope_t klass);
 /// gets the template arguments.
 CPPINTEROP_API std::string GetQualifiedCompleteName(TCppScope_t klass);
 
+CPPINTEROP_API std::string GetTruncatedQualifiedCompleteName(TCppScope_t klass);
+
 CPPINTEROP_API std::string GetQualifiedCompleteNameWithTemplateArgs(TCppScope_t klass);
 
 /// Retrieves the Doxygen documentation comment for a declaration.
@@ -841,6 +843,10 @@ CPPINTEROP_API bool IsLongType(TCppType_t type);
 
 /// Gets the Type (passed as a parameter) as a String value.
 CPPINTEROP_API std::string GetTypeAsString(TCppType_t type);
+
+/// Gets the Type (passed as a parameter) as a String value with template
+/// arguments replaced by an ellipsis.
+CPPINTEROP_API std::string GetTypeAsTruncatedString(TCppType_t type);
 
 /// Gets the Canonical Type string from the std string. A canonical type
 /// is the type with any typedef names, syntactic sugars or modifiers stripped

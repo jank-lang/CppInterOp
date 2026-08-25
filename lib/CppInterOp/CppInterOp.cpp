@@ -902,6 +902,28 @@ std::string GetQualifiedName(TCppType_t klass) {
   return "<unnamed>";
 }
 
+static std::string TruncateTypeString(std::string const &typeString) {
+  std::string truncatedTypeString;
+  truncatedTypeString.reserve(typeString.size());
+
+  unsigned templateDepth = 0;
+  for (char character : typeString) {
+    if (character == '<') {
+      if (templateDepth == 0)
+        truncatedTypeString += "<…";
+      ++templateDepth;
+    } else if (character == '>' && templateDepth > 0) {
+      --templateDepth;
+      if (templateDepth == 0)
+        truncatedTypeString += '>';
+    } else if (templateDepth == 0) {
+      truncatedTypeString += character;
+    }
+  }
+
+  return truncatedTypeString;
+}
+
 // FIXME: Figure out how to merge with GetCompleteName.
 std::string GetQualifiedCompleteName(TCppType_t klass) {
   auto& C = getSema().getASTContext();
@@ -927,6 +949,10 @@ std::string GetQualifiedCompleteName(TCppType_t klass) {
   }
 
   return "<unnamed>";
+}
+
+std::string GetTruncatedQualifiedCompleteName(TCppType_t klass) {
+  return TruncateTypeString(GetQualifiedCompleteName(klass));
 }
 
 // FIXME: Figure out how to merge with GetCompleteName.
@@ -3245,6 +3271,10 @@ std::string GetTypeAsString(TCppType_t var) {
   Policy.SuppressTagKeyword = true; // Do not print `class std::string`.
   Policy.FullyQualifiedName = true;
   return QT.getAsString(Policy);
+}
+
+std::string GetTypeAsTruncatedString(TCppType_t var) {
+  return TruncateTypeString(GetTypeAsString(var));
 }
 
 TCppType_t GetCanonicalType(TCppType_t type) {
