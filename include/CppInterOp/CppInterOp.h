@@ -621,6 +621,8 @@ CPPINTEROP_API TCppType_t GetFunctionArgTypeFromType(TCppType_t func,
 
 CPPINTEROP_API bool IsFunctionVariadic(TCppFunction_t function);
 
+CPPINTEROP_API bool IsFunctionVariadicTemplate(TCppFunction_t fn);
+
 ///\returns if a function was marked as \c =delete.
 CPPINTEROP_API bool IsFunctionDeleted(TCppConstFunction_t function);
 

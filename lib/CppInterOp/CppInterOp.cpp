@@ -676,6 +676,13 @@ bool IsConstructible(TCppType_t to_type, TCppType_t from_type) {
     return false;
 
   auto* TT = cast<TypeTraitExpr>(ER.get());
+  /* Some overload checks happen while template parameter packs are still dependent.
+   * Clang asserts if we ask for a bool value before the type trait is fully
+   * instantiated, so treat that case as a failed constructibility check. */
+  if(TT->isValueDependent())
+  {
+    return false;
+  }
   return TT->getBoolValue();
 }
 
@@ -1669,6 +1676,23 @@ bool IsFunctionVariadic(TCppFunction_t func) {
     return false;
 
   return FD->isVariadic();
+}
+
+bool IsFunctionVariadicTemplate(TCppFunction_t fn) {
+  if(!fn)
+    return false;
+
+  auto * const decl{ static_cast<clang::Decl *>(fn) };
+  auto *function_decl{ llvm::dyn_cast_or_null<clang::FunctionDecl>(decl) };
+  if(!function_decl) {
+    if(auto * const template_decl{ llvm::dyn_cast_or_null<clang::FunctionTemplateDecl>(decl) })
+      function_decl = template_decl->getTemplatedDecl();
+  }
+  if(!function_decl || function_decl->getNumParams() == 0)
+    return false;
+
+  auto last_param{ function_decl->getParamDecl(function_decl->getNumParams() - 1) };
+  return last_param && last_param->isParameterPack();
 }
 
 // Internal functions that are not needed outside the library are
