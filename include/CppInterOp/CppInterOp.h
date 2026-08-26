@@ -487,7 +487,7 @@ CPPINTEROP_API std::string GetQualifiedName(TCppScope_t klass);
 /// gets the template arguments.
 CPPINTEROP_API std::string GetQualifiedCompleteName(TCppScope_t klass);
 
-CPPINTEROP_API std::string GetTruncatedQualifiedCompleteName(TCppScope_t klass);
+CPPINTEROP_API std::string GetTruncatedName(TCppScope_t klass);
 
 CPPINTEROP_API std::string GetQualifiedCompleteNameWithTemplateArgs(TCppScope_t klass);
 

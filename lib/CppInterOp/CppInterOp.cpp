@@ -951,8 +951,8 @@ std::string GetQualifiedCompleteName(TCppType_t klass) {
   return "<unnamed>";
 }
 
-std::string GetTruncatedQualifiedCompleteName(TCppType_t klass) {
-  return TruncateTypeString(GetQualifiedCompleteName(klass));
+std::string GetTruncatedName(TCppType_t klass) {
+  return TruncateTypeString(GetCompleteName(klass));
 }
 
 // FIXME: Figure out how to merge with GetCompleteName.
@@ -3274,7 +3274,14 @@ std::string GetTypeAsString(TCppType_t var) {
 }
 
 std::string GetTypeAsTruncatedString(TCppType_t var) {
-  return TruncateTypeString(GetTypeAsString(var));
+  QualType QT = QualType::getFromOpaquePtr(var);
+  // FIXME: Get the default printing policy from the ASTContext.
+  PrintingPolicy Policy((LangOptions()));
+  Policy.Bool = true;               // Print bool instead of _Bool.
+  Policy.SuppressTagKeyword = true; // Do not print `class std::string`.
+  Policy.SuppressScope = true;
+  Policy.FullyQualifiedName = false;
+  return TruncateTypeString(QT.getAsString(Policy));
 }
 
 TCppType_t GetCanonicalType(TCppType_t type) {
