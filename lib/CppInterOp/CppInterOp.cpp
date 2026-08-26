@@ -121,6 +121,23 @@ extern "C" void __clang_Interpreter_SetValueNoAlloc(void* This, void* OutVal,
                                                     void* OpaqueType, ...);
 #endif // CPPINTEROP_USE_CLING
 
+namespace {
+
+class clangSilent {
+public:
+  clangSilent(clang::DiagnosticsEngine& diag) : fDiagEngine(diag) {
+    fOldDiagValue = fDiagEngine.getSuppressAllDiagnostics();
+    fDiagEngine.setSuppressAllDiagnostics(true);
+  }
+
+  ~clangSilent() { fDiagEngine.setSuppressAllDiagnostics(fOldDiagValue); }
+
+protected:
+  clang::DiagnosticsEngine& fDiagEngine;
+  bool fOldDiagValue;
+};
+} // namespace
+
 namespace CppImpl {
 
 using namespace clang;
@@ -661,6 +678,8 @@ bool IsCStyleConvertible(TCppType_t from_type, TCppType_t to_type) {
 }
 
 bool IsConstructible(TCppType_t to_type, TCppType_t from_type) {
+  clangSilent diagSuppr(getSema().getDiagnostics());
+
   QualType FromTy = QualType::getFromOpaquePtr(from_type);
   QualType ToTy = QualType::getFromOpaquePtr(to_type);
 
@@ -6344,23 +6363,6 @@ void GetIncludePaths(std::vector<std::string>& IncludePaths, bool withSystem,
   for (auto& i : paths)
     IncludePaths.push_back(i);
 }
-
-namespace {
-
-class clangSilent {
-public:
-  clangSilent(clang::DiagnosticsEngine& diag) : fDiagEngine(diag) {
-    fOldDiagValue = fDiagEngine.getSuppressAllDiagnostics();
-    fDiagEngine.setSuppressAllDiagnostics(true);
-  }
-
-  ~clangSilent() { fDiagEngine.setSuppressAllDiagnostics(fOldDiagValue); }
-
-protected:
-  clang::DiagnosticsEngine& fDiagEngine;
-  bool fOldDiagValue;
-};
-} // namespace
 
 int Declare(compat::Interpreter& I, const char* code, bool silent) {
   if (silent) {
