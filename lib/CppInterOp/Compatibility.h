@@ -236,7 +236,10 @@ public:
       || Info.getID() == clang::diag::note_ast_file_input_files_validation_status
     };
     if (Info.getID() == clang::diag::err_fe_ast_file_modified
-        || Info.getID() == clang::diag::note_fe_ast_file_modified)
+#if CLANG_VERSION_MAJOR >= 23
+        || Info.getID() == clang::diag::note_fe_ast_file_modified
+#endif
+        )
       OutOfDate = true;
     if (IsPCHStalenessDiagnostic || (OutOfDate && DiagLevel == clang::DiagnosticsEngine::Note))
       return;
