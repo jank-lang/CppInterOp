@@ -36,6 +36,7 @@
 #include <string>
 #include <unordered_set>
 #include <vector>
+#include <cmath>
 
 #ifdef LLVM_ON_UNIX
 #include <dlfcn.h>
