@@ -933,7 +933,7 @@ CPPINTEROP_API OperatorArity GetOperatorArity(TCppFunction_t op);
 
 ///\returns list of operator overloads
 CPPINTEROP_API void GetOperator(Operator op,
-                                std::vector<TemplateArgInfo> const& arg_types,
+                                std::vector<TCppType_t> const& arg_types,
                                 std::vector<TCppFunction_t>& operators,
                                 OperatorArity kind);
 
@@ -1102,7 +1102,7 @@ BestOverloadFunctionMatch(const std::vector<TCppFunction_t>& candidates,
 
 CPPINTEROP_API std::vector<TCppScope_t>
 BestOverloadMatch(const std::vector<TCppScope_t>& candidates,
-                  const std::vector<TemplateArgInfo>& arg_types,
+                  const std::vector<TCppType_t>& arg_types,
                   const std::vector<TCppScope_t>& arg_scopes);
 
 /// Gets Clang's overload-resolution result for a single candidate.
@@ -1112,7 +1112,7 @@ BestOverloadMatch(const std::vector<TCppScope_t>& candidates,
 /// information excludes that implicit object argument.
 CPPINTEROP_API OverloadCandidateInfo
 GetOverloadCandidateInfo(TCppScope_t candidate,
-                         const std::vector<TemplateArgInfo>& arg_types,
+                         const std::vector<TCppType_t>& arg_types,
                          const std::vector<TCppScope_t>& arg_scopes);
 
 CPPINTEROP_API void GetAllCppNames(TCppScope_t scope,

@@ -1939,7 +1939,7 @@ namespace {
 
 void AddOverloadCandidates(
     Sema& S, const std::vector<TCppScope_t>& candidates,
-    const std::vector<TemplateArgInfo>& arg_types,
+    const std::vector<TCppType_t>& arg_types,
     const std::vector<TCppScope_t>& arg_scopes, OverloadCandidateSet& candSet,
     SmallVectorImpl<Expr*>& non_member_args,
     SmallVectorImpl<Expr*>& member_args, bool& has_member_candidate) {
@@ -1947,7 +1947,7 @@ void AddOverloadCandidates(
   SourceLocation Loc;
 
   for (unsigned i = 0; i < arg_types.size(); ++i) {
-    QualType ArgTy = QualType::getFromOpaquePtr(arg_types[i].m_Type);
+    QualType ArgTy = QualType::getFromOpaquePtr(arg_types[i]);
     Decl* ArgDecl =
         i < arg_scopes.size() ? static_cast<Decl*>(arg_scopes[i]) : nullptr;
 
@@ -1999,7 +1999,7 @@ void AddOverloadCandidates(
       if (arg_types.empty())
         return true;
 
-      QualType OT = QualType::getFromOpaquePtr(arg_types[0].m_Type);
+      QualType OT = QualType::getFromOpaquePtr(arg_types[0]);
       ExprValueKind ExprKind = ExprValueKind::VK_PRValue;
       if (OT->isLValueReferenceType())
         ExprKind = ExprValueKind::VK_LValue;
@@ -2145,7 +2145,7 @@ public:
 
 std::vector<TCppScope_t>
 BestOverloadMatch(const std::vector<TCppScope_t>& candidates,
-                  const std::vector<TemplateArgInfo>& arg_types,
+                  const std::vector<TCppType_t>& arg_types,
                   const std::vector<TCppScope_t>& arg_scopes) {
   Sema& S = getSema();
   SourceLocation Loc;
@@ -2182,7 +2182,7 @@ BestOverloadMatch(const std::vector<TCppScope_t>& candidates,
 
 OverloadCandidateInfo
 GetOverloadCandidateInfo(TCppScope_t candidate,
-                         const std::vector<TemplateArgInfo>& arg_types,
+                         const std::vector<TCppType_t>& arg_types,
                          const std::vector<TCppScope_t>& arg_scopes) {
   OverloadCandidateInfo ret;
   if (!candidate)
@@ -6878,7 +6878,7 @@ OperatorArity GetOperatorArity(TCppFunction_t op) {
   return (OperatorArity)~0U;
 }
 
-void GetOperator(Operator op, std::vector<TemplateArgInfo> const& arg_types,
+void GetOperator(Operator op, std::vector<TCppType_t> const& arg_types,
                  std::vector<TCppFunction_t>& operators, OperatorArity kind) {
   Sema& S = getSema();
   ASTContext& Ctx = S.Context;
@@ -6910,7 +6910,7 @@ void GetOperator(Operator op, std::vector<TemplateArgInfo> const& arg_types,
   llvm::SmallVector<Expr*, 2> ArgExprs;
   ArgExprs.reserve(arg_types.size());
   for (auto const& arg_type : arg_types) {
-    QualType T = QualType::getFromOpaquePtr(arg_type.m_Type);
+    QualType T = QualType::getFromOpaquePtr(arg_type);
     T = Ctx.getCanonicalType(T).getUnqualifiedType().getNonReferenceType();
     ArgExprs.push_back(new (Ctx)
                            OpaqueValueExpr(SourceLocation(), T, VK_LValue));
