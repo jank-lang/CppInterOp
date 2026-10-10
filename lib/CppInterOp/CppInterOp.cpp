@@ -6968,6 +6968,154 @@ void GetOperator(Operator op, std::vector<TCppType_t> const& arg_types,
   }
 }
 
+TCppType_t GetBuiltinOperatorType(Operator op,
+                                  std::vector<TCppType_t> const& arg_types) {
+  Sema& S = getSema();
+  ASTContext& Ctx = S.getASTContext();
+
+  llvm::SmallVector<Expr*, 2> ArgExprs;
+  ArgExprs.reserve(arg_types.size());
+  for (auto const arg_type : arg_types) {
+    QualType T = QualType::getFromOpaquePtr(arg_type);
+    if (T.isNull())
+      return nullptr;
+
+    // Operator operands are expressions, so references are represented by their
+    // referred-to type while cv-qualifiers remain significant.
+    auto const is_lvalue_reference = T->isLValueReferenceType();
+    T = T.getNonReferenceType();
+    auto const value_kind{
+      T->isNullPtrType() && !is_lvalue_reference ? VK_PRValue : VK_LValue
+    };
+    ArgExprs.push_back(new (Ctx)
+                           OpaqueValueExpr(SourceLocation(), T, value_kind));
+  }
+
+  auto build_unary = [&](UnaryOperatorKind unary_op) -> TCppType_t {
+    if (ArgExprs.size() != 1)
+      return nullptr;
+
+    clangSilent diag_suppr{S.getDiagnostics()};
+    auto const result{
+      S.CreateBuiltinUnaryOp(SourceLocation(), unary_op, ArgExprs.front())
+    };
+    if (result.isInvalid())
+      return nullptr;
+
+    return result.get()->getType().getAsOpaquePtr();
+  };
+
+  auto build_binary = [&](BinaryOperatorKind binary_op) -> TCppType_t {
+    if (ArgExprs.size() != 2)
+      return nullptr;
+
+    clangSilent diag_suppr{S.getDiagnostics()};
+    auto const result{
+      S.CreateBuiltinBinOp(SourceLocation(), binary_op, ArgExprs[0], ArgExprs[1])
+    };
+    if (result.isInvalid())
+      return nullptr;
+
+    return result.get()->getType().getAsOpaquePtr();
+  };
+
+  auto build_subscript = [&]() -> TCppType_t {
+    if (ArgExprs.size() != 2)
+      return nullptr;
+
+    clangSilent diag_suppr{S.getDiagnostics()};
+    auto const result{ S.CreateBuiltinArraySubscriptExpr(ArgExprs[0],
+                                                        SourceLocation(),
+                                                        ArgExprs[1],
+                                                        SourceLocation()) };
+    if (result.isInvalid())
+      return nullptr;
+
+    return result.get()->getType().getAsOpaquePtr();
+  };
+
+  switch (op) {
+  case OP_Plus:
+    if (ArgExprs.size() == 1)
+      return build_unary(UO_Plus);
+    return build_binary(BO_Add);
+  case OP_Minus:
+    if (ArgExprs.size() == 1)
+      return build_unary(UO_Minus);
+    return build_binary(BO_Sub);
+  case OP_Star:
+    if (ArgExprs.size() == 1)
+      return build_unary(UO_Deref);
+    return build_binary(BO_Mul);
+  case OP_Slash:
+    return build_binary(BO_Div);
+  case OP_Percent:
+    return build_binary(BO_Rem);
+  case OP_Caret:
+    return build_binary(BO_Xor);
+  case OP_Amp:
+    if (ArgExprs.size() == 1)
+      return build_unary(UO_AddrOf);
+    return build_binary(BO_And);
+  case OP_Pipe:
+    return build_binary(BO_Or);
+  case OP_Tilde:
+    return build_unary(UO_Not);
+  case OP_Exclaim:
+    return build_unary(UO_LNot);
+  case OP_Equal:
+    return build_binary(BO_Assign);
+  case OP_Less:
+    return build_binary(BO_LT);
+  case OP_Greater:
+    return build_binary(BO_GT);
+  case OP_PlusEqual:
+    return build_binary(BO_AddAssign);
+  case OP_MinusEqual:
+    return build_binary(BO_SubAssign);
+  case OP_StarEqual:
+    return build_binary(BO_MulAssign);
+  case OP_SlashEqual:
+    return build_binary(BO_DivAssign);
+  case OP_PercentEqual:
+    return build_binary(BO_RemAssign);
+  case OP_CaretEqual:
+    return build_binary(BO_XorAssign);
+  case OP_AmpEqual:
+    return build_binary(BO_AndAssign);
+  case OP_PipeEqual:
+    return build_binary(BO_OrAssign);
+  case OP_LessLess:
+    return build_binary(BO_Shl);
+  case OP_GreaterGreater:
+    return build_binary(BO_Shr);
+  case OP_LessLessEqual:
+    return build_binary(BO_ShlAssign);
+  case OP_GreaterGreaterEqual:
+    return build_binary(BO_ShrAssign);
+  case OP_EqualEqual:
+    return build_binary(BO_EQ);
+  case OP_ExclaimEqual:
+    return build_binary(BO_NE);
+  case OP_LessEqual:
+    return build_binary(BO_LE);
+  case OP_GreaterEqual:
+    return build_binary(BO_GE);
+  case OP_AmpAmp:
+    return build_binary(BO_LAnd);
+  case OP_PipePipe:
+    return build_binary(BO_LOr);
+  case OP_PlusPlus:
+    return build_unary(UO_PreInc);
+  case OP_MinusMinus:
+    return build_unary(UO_PreDec);
+  case OP_Subscript:
+    return build_subscript();
+  default:
+    return nullptr;
+  }
+}
+
 TCppObject_t Allocate(TCppScope_t scope, TCppIndex_t count) {
   return (TCppObject_t)::operator new(Cpp::SizeOf(scope) * count);
 }

@@ -937,6 +937,15 @@ CPPINTEROP_API void GetOperator(Operator op,
                                 std::vector<TCppFunction_t>& operators,
                                 OperatorArity kind);
 
+/// Returns the result type of a built-in operator expression, or nullptr when
+/// the operator is not valid for the supplied operand types. The operand list
+/// must contain one type for unary operators or two types for binary operators.
+/// This query only considers built-in operators; overloaded operators are
+/// handled separately.
+CPPINTEROP_API TCppType_t
+GetBuiltinOperatorType(Operator op,
+                       std::vector<TCppType_t> const& arg_types);
+
 /// Creates an owned instance of the interpreter we need for the various interop
 /// services and pushes it onto a stack.
 ///\param[in] Args - the list of arguments for interpreter constructor.
