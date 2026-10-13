@@ -2455,6 +2455,10 @@ TCppScope_t LookupDatamember(const std::string& name, TCppScope_t parent) {
     if (llvm::isa_and_nonnull<clang::FieldDecl>(ND)) {
       return (TCppScope_t)ND;
     }
+    // Members of anonymous structs/unions are found as indirect fields; the
+    // underlying field is what callers can query for type and access.
+    if (auto* IFD = llvm::dyn_cast<clang::IndirectFieldDecl>(ND))
+      return (TCppScope_t)IFD->getAnonField();
   }
 
   return 0;
