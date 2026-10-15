@@ -620,6 +620,9 @@ TCppType_t GetCommonType(TCppType_t lhs, TCppType_t rhs) {
     if (Trap.hasErrorOccurred() || Composite.isNull())
       return nullptr;
 
+    if(Composite->isArrayType())
+      return GetPointerType(GetArrayElementType(Composite.getAsOpaquePtr()));
+
     return Composite.getAsOpaquePtr();
   }
 
