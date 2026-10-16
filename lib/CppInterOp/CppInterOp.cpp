@@ -1775,6 +1775,20 @@ bool IsTemplatedFunction(TCppFunction_t func) {
   return IsTemplatedFunction(D) || IsTemplateInstantiationOrSpecialization(D);
 }
 
+bool IsBodylessFunctionTemplateSpecialization(TCppFunction_t func) {
+  auto* D = static_cast<Decl*>(func);
+  if (auto* FTD = llvm::dyn_cast_or_null<FunctionTemplateDecl>(D))
+    return !FTD->getTemplatedDecl()->isDefined();
+
+  auto* FD = llvm::dyn_cast_or_null<FunctionDecl>(D);
+  if (!FD || FD->isDefined() || !FD->isTemplateInstantiation())
+    return false;
+
+  const FunctionDecl* Pattern =
+      FD->getTemplateInstantiationPattern(/*ForDefinition=*/true);
+  return !Pattern || !Pattern->isDefined();
+}
+
 // FIXME: This lookup is broken, and should no longer be used in favour of
 // `GetClassTemplatedMethods` If the candidate set returned is =1, that means
 // the template function exists and >1 means overloads

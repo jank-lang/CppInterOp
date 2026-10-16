@@ -630,6 +630,12 @@ CPPINTEROP_API bool IsFunctionTypeConst(TCppType_t function_type);
 
 CPPINTEROP_API bool IsTemplatedFunction(TCppFunction_t func);
 
+/// \returns true if \c func is a function template, or a specialization of
+/// one, whose definition is not available and whose primary template has no
+/// body. Such a function can't be instantiated, but it may still be linkable
+/// if it was explicitly instantiated elsewhere.
+CPPINTEROP_API bool IsBodylessFunctionTemplateSpecialization(TCppFunction_t func);
+
 /// This function performs a lookup to check if there is a
 /// templated function of that type.
 CPPINTEROP_API bool ExistsFunctionTemplate(const std::string& name,
