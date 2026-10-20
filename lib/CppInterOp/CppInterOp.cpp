@@ -6582,6 +6582,45 @@ static Decl* InstantiateTemplate(TemplateDecl* TemplateD,
   return GetScopeFromType(TT);
 }
 
+static bool CompleteTemplateArguments(Sema& S, TemplateDecl* TemplateD,
+                                      const TemplateArgInfo* template_args,
+                                      size_t template_args_size,
+                                      SmallVectorImpl<TemplateArgument>& args) {
+  ASTContext& C = S.getASTContext();
+  TemplateArgumentListInfo TLI{};
+  for (size_t i = 0; i < template_args_size; ++i) {
+    QualType ArgTy = QualType::getFromOpaquePtr(template_args[i].m_Type);
+    TemplateArgument Arg;
+    if (template_args[i].m_IntegralValue) {
+      // We have a non-type template parameter. Create an integral value from
+      // the string representation.
+      auto Res = llvm::APSInt(template_args[i].m_IntegralValue);
+      Res = Res.extOrTrunc(C.getIntWidth(ArgTy));
+      Arg = TemplateArgument(C, Res, ArgTy);
+    } else {
+      Arg = TemplateArgument(ArgTy);
+    }
+    TLI.addArgument(
+        S.getTrivialTemplateArgumentLoc(Arg, ArgTy, SourceLocation()));
+  }
+
+  Sema::CheckTemplateArgumentInfo CTAI;
+  if (S.CheckTemplateArgumentList(TemplateD, TemplateD->getLocation(), TLI,
+                                  DefaultArguments{},
+                                  /*PartialTemplateArgs=*/false, CTAI)) {
+    return true;
+  }
+
+  for (const auto& Arg : CTAI.SugaredConverted) {
+    if (Arg.getKind() == TemplateArgument::Pack) {
+      args.append(Arg.pack_elements().begin(), Arg.pack_elements().end());
+    } else {
+      args.push_back(Arg);
+    }
+  }
+  return false;
+}
+
 Decl* InstantiateTemplate(TemplateDecl* TemplateD,
                           ArrayRef<TemplateArgument> TemplateArgs, Sema& S,
                           bool instantiate_body) {
@@ -6599,27 +6638,16 @@ TCppScope_t InstantiateTemplate(compat::Interpreter& I, TCppScope_t tmpl,
                                 size_t template_args_size,
                                 bool instantiate_body) {
   auto& S = I.getSema();
-  auto& C = S.getASTContext();
-
   llvm::SmallVector<TemplateArgument> TemplateArgs;
-  TemplateArgs.reserve(template_args_size);
-  for (size_t i = 0; i < template_args_size; ++i) {
-    QualType ArgTy = QualType::getFromOpaquePtr(template_args[i].m_Type);
-    if (template_args[i].m_IntegralValue) {
-      // We have a non-type template parameter. Create an integral value from
-      // the string representation.
-      auto Res = llvm::APSInt(template_args[i].m_IntegralValue);
-      Res = Res.extOrTrunc(C.getIntWidth(ArgTy));
-      TemplateArgs.push_back(TemplateArgument(C, Res, ArgTy));
-    } else {
-      TemplateArgs.push_back(ArgTy);
-    }
+  auto* TemplateD = static_cast<TemplateDecl*>(tmpl);
+  if (CompleteTemplateArguments(S, TemplateD, template_args, template_args_size,
+                                TemplateArgs)) {
+    return nullptr;
   }
 
-  TemplateDecl* TmplD = static_cast<TemplateDecl*>(tmpl);
   // We will create a new decl, push a transaction.
   compat::SynthesizingCodeRAII RAII(&getInterp());
-  return InstantiateTemplate(TmplD, TemplateArgs, S, instantiate_body);
+  return InstantiateTemplate(TemplateD, TemplateArgs, S, instantiate_body);
 }
 
 TCppScope_t InstantiateTemplate(TCppScope_t tmpl,
