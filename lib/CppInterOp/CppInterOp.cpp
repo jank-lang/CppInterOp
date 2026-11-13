@@ -6575,6 +6575,14 @@ static Decl* InstantiateTemplate(TemplateDecl* TemplateD,
         S.MarkFunctionReferenced(fakeLoc, Ctor);
         if (Ctor->isDefaulted() && !Ctor->isDeleted() && !Ctor->isDefined())
           S.DefineImplicitDefaultConstructor(fakeLoc, Ctor);
+        // The definitions we force here happen outside of any parse, so Clang
+        // never hands them to the code generator. Without that, header-only
+        // constructors would be missing from the JIT.
+        if (!Ctor->isDeleted()) {
+          S.PerformPendingInstantiations();
+          if (Ctor->isDefined())
+            S.getASTConsumer().HandleTopLevelDecl(DeclGroupRef(Ctor));
+        }
       }
     }
   }
