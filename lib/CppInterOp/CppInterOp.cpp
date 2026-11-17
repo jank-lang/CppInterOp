@@ -1478,10 +1478,15 @@ std::vector<TCppFunction_t> GetFunctionsUsingName(TCppScope_t scope,
 
   R.resolveKind();
 
-  for (auto* Found : R)
+  for (auto* Found : R) {
+    // Functions introduced by using declarations are found as shadow decls,
+    // so we need to look through them to the functions they refer to.
+    if (auto* USD = llvm::dyn_cast<UsingShadowDecl>(Found))
+      Found = USD->getTargetDecl();
     if (llvm::isa<FunctionDecl>(Found) ||
         llvm::isa<FunctionTemplateDecl>(Found))
       funcs.push_back(Found);
+  }
 
   return funcs;
 }
