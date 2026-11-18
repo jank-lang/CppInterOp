@@ -330,6 +330,9 @@ CPPINTEROP_API bool IsDebugOutputEnabled();
 /// initialization.
 CPPINTEROP_API bool IsAggregate(TCppScope_t scope);
 
+/// Checks if the given scope is a union.
+CPPINTEROP_API bool IsUnion(TCppScope_t scope);
+
 /// Checks if the scope is a namespace or not.
 CPPINTEROP_API bool IsNamespace(TCppScope_t scope);
 

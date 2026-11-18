@@ -365,6 +365,13 @@ bool IsAggregate(TCppScope_t scope) {
   return false;
 }
 
+bool IsUnion(TCppScope_t scope) {
+  Decl* D = static_cast<Decl*>(scope);
+  if (auto* RD = dyn_cast_or_null<RecordDecl>(D))
+    return RD->isUnion();
+  return false;
+}
+
 bool IsNamespace(TCppScope_t scope) {
   Decl* D = static_cast<Decl*>(scope);
   return isa<NamespaceDecl>(D);
